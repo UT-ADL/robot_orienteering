@@ -1,0 +1,19 @@
+<launch>
+
+    <arg name='initial_heading' default='0' />
+
+    <!-- ZED launch -->
+    <include file="$(find robot_orienteering)/launch/zed_cam_15fps.launch" />
+
+    <!-- Xsens device launch -->
+    <include file="$(find xsens_mti_driver)/launch/xsens_mti_node.launch" />
+    
+    <!-- run heading publisher node -->
+    <node pkg="robot_orienteering" type="heading_publisher.py" name="gps_heading_publisher" required="true">
+        <param name="initial_heading" value="$(arg initial_heading)" />
+    </node>
+
+    <!-- run deadman_switch node -->
+    <node pkg="robot_orienteering" type="deadman_switch.py" name="deadman_switch" />
+
+</launch>
