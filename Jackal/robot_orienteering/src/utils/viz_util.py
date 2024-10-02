@@ -83,24 +83,23 @@ def convert_2d_coordinates_to_pixel_coordinates(coordinates, transform, camera_m
     return camera_pixel_coords
 
 
-def show_laser_scan_projection(current_image, laser_coordinates, camera_model, transform):        
-        
-        if laser_coordinates is not None:
-            camera_pixel_coords = convert_2d_coordinates_to_pixel_coordinates(coordinates=laser_coordinates,
-                                                                              transform=transform,
-                                                                              camera_model=camera_model)
+def show_laser_scan_projection(current_image, laser_coordinates, camera_model, transform, radius, linewidth):   
+    if laser_coordinates is not None:
+        camera_pixel_coords = convert_2d_coordinates_to_pixel_coordinates(coordinates=laser_coordinates,
+                                                                            transform=transform,
+                                                                            camera_model=camera_model)
 
-            project_over_camera_image(img=current_image,
-                                      camera_pixel_coords=camera_pixel_coords,
-                                      COLOR=GREEN,
-                                      radius=4,
-                                      linewidth=2)
-            
-            draw_top_down_overlay(img=current_image,
-                          coordinates=laser_coordinates,
-                          COLOR=GREEN,
-                          radius=2,
-                          linewidth=1)
+        project_over_camera_image(img=current_image,
+                                  camera_pixel_coords=camera_pixel_coords,
+                                  COLOR=GREEN,
+                                  radius=radius,
+                                  linewidth=linewidth)
+        
+        draw_top_down_overlay(img=current_image,
+                              coordinates=laser_coordinates,
+                              COLOR=GREEN,
+                              radius=radius,
+                              linewidth=linewidth)
 
 
 def show_trajectories_projection(current_image, best_waypoint_id, collision_free_trajectories, camera_model, transform, radius, linewidth):
