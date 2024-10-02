@@ -56,6 +56,7 @@ def extract_gps_info(image_stream):
         return None
     return lat, lon
 
+
 class JackalDrive:
 
     def __init__(self):
@@ -518,9 +519,6 @@ class JackalDrive:
         probability_map_img = None
         candidate_px = None
 
-
-        
-
         # # If there are valid waypoints (collision free)
         if collision_free_trajectories.shape[0] > 0:
 
@@ -591,42 +589,14 @@ class JackalDrive:
             self.vel = Twist()
             self.vel.angular.z = w  
         
-        # While not using global planner model
-        if probability_map_img is None:
-            if candidate_px is not None:
-                best_wp_px = candidate_px[best_waypoint_id]
-                best_waypoint_crop_coords = self.map_reader.to_crop_coordinates(self.current_position, best_wp_px)
-                # spawn candidate px over trajectories map only
-                # set the candidate px spawned trajectories map as global map img
-                for wp_px in candidate_px:
-                    wp_crop_coords = self.map_reader.to_crop_coordinates(self.current_position, wp_px)
-                    
-                    # plot all waypoints in black
-                    cv2.circle(trajectories_map_img, wp_crop_coords, 3, (0, 0, 0), -1)
-
-                # plot best waypoint in green
-                cv2.circle(trajectories_map_img, best_waypoint_crop_coords, 3, (0, 255, 0), -1)
-            
-            trajectories_map_img_cropped = self.global_planner_viz.crop_map(trajectories_map_img)
-            # set global map img as trajectories map only
-            global_map_img = trajectories_map_img_cropped
-        
-        # While using global planner model
-        else:
-            if candidate_px is not None:
-                for wp_px in candidate_px:
-                    wp_crop_coords = self.map_reader.to_crop_coordinates(self.current_position, wp_px)
-                    cv2.circle(trajectories_map_img, wp_crop_coords, 3, (0, 0, 0), -1)
-                    cv2.circle(probability_map_img, wp_crop_coords, 3, (0, 0, 0), -1)
-                
-                cv2.circle(trajectories_map_img, wp_crop_coords, 3, (0, 255, 0), -1)
-                cv2.circle(probability_map_img, wp_crop_coords, 3, (0, 255, 0), -1)
-
-            probability_map_img_cropped = self.global_planner_viz.crop_map(probability_map_img)
-            trajectories_map_img_cropped = self.global_planner_viz.crop_map(trajectories_map_img)
-
-            # concatenate probability map and trajectories map as global map img
-            global_map_img = np.concatenate((probability_map_img_cropped, trajectories_map_img_cropped), axis=1)
+        # Set the global map image as required
+        # If using the euclidean clustering, set it as only the trajectories map with the candidate waypoints
+        # If using the global planner mode, set is as the probability map and trajectories map combined with the waypoints
+        global_map_img = self.global_planner_viz.prepare_global_map_img(trajectories_map_img=trajectories_map_img, 
+                                                                        probability_map_img=probability_map_img, 
+                                                                        current_position=self.current_position, 
+                                                                        candidate_px=candidate_px, 
+                                                                        best_waypoint_id=best_waypoint_id)
 
         # visualize the global map img on top right corner
         global_map_height, global_map_width, _ = global_map_img.shape
@@ -677,7 +647,7 @@ class JackalDrive:
         # Keyboard interrupt handling
         key = cv2.waitKey(1)
         
-        # Shutdown all visualization windows and node is pressed 'ESC'
+        # Shutdown all visualization windows and node if pressed 'ESC'
         if key == 27:
             if self.record_video:
                 self.video.release()
