@@ -1,8 +1,6 @@
 import rospy
 from sensor_msgs.msg import Joy
 from std_msgs.msg import Bool
-from move_base_msgs.msg import MoveBaseAction
-import actionlib
 
 class DeadmanSwitch:
     def __init__(self):
@@ -42,10 +40,9 @@ class DeadmanSwitch:
 
 if __name__ == '__main__':
     try:
-
         rospy.init_node('deadman_switch')
         node = DeadmanSwitch()
         rospy.spin()
-        # joy_to_bool_subscriber()
+        
     except rospy.ROSInterruptException:
         pass
