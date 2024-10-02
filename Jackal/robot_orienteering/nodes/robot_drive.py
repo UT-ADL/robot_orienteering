@@ -85,11 +85,9 @@ class JackalDrive:
         self.gps_conditioning_threshold = float(rospy.get_param('~gps_conditioning_threshold'))
 
         self.use_laser = bool(rospy.get_param('~use_laser', True))
-        self.use_gps = bool(rospy.get_param('~use_gps', True))
         self.use_global_planner = bool(rospy.get_param('~use_global_planner', False))
         self.use_nomad = bool(rospy.get_param('~use_nomad', False))
         
-        rospy.loginfo(f"use_gps: {self.use_gps}")
         rospy.loginfo(f"use_global_planner: {self.use_global_planner}")
         rospy.loginfo(f"use_laser: {self.use_laser}")
         rospy.loginfo(f"use_nomad: {self.use_nomad}")
@@ -438,7 +436,7 @@ class JackalDrive:
             rospy.loginfo_throttle(5, "laser scan not received")
             return
         
-        if self.use_gps == True and self.current_heading is None:
+        if self.current_heading is None:
             rospy.loginfo("GPS heading not received ..")
             return
         
