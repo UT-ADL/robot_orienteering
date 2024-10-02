@@ -17,7 +17,6 @@
 
     <arg name='nomad_conditioning_threshold' default='3' />
     <arg name='gps_conditioning_threshold' default='10' />  
-    <arg name='goal_heuristic' default='euclidean' doc='euclidean, global_planner, hybrid' />     
 
     <arg name='use_gps' default='True' />
     <arg name='use_global_planner' default='False' />
