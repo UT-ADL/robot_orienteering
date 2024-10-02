@@ -96,8 +96,11 @@ class GlobalPlannerViz:
                     cv2.circle(trajectories_map_img, wp_crop_coords, 3, (0, 0, 0), -1)
                     cv2.circle(probability_map_img, wp_crop_coords, 3, (0, 0, 0), -1)
                 
-                cv2.circle(trajectories_map_img, wp_crop_coords, 3, (0, 255, 0), -1)
-                cv2.circle(probability_map_img, wp_crop_coords, 3, (0, 255, 0), -1)
+                best_wp_px = candidate_px[best_waypoint_id]
+                best_waypoint_crop_coords = self.map_reader.to_crop_coordinates(current_position, best_wp_px)
+
+                cv2.circle(trajectories_map_img, best_waypoint_crop_coords, 3, (0, 255, 0), -1)
+                cv2.circle(probability_map_img, best_waypoint_crop_coords, 3, (0, 255, 0), -1)
 
             probability_map_img_cropped = self.crop_map(probability_map_img)
             trajectories_map_img_cropped = self.crop_map(trajectories_map_img)
