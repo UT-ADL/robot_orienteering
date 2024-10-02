@@ -65,6 +65,48 @@ class GlobalPlannerViz:
         cv2.circle(probability_map_img, (int(goal_pos_crop[0]), int(goal_pos_crop[1])), 2, YELLOW, 2)
         return probability_map_img
 
+    def prepare_global_map_img(self, trajectories_map_img, probability_map_img, current_position, candidate_px, best_waypoint_id):
+        
+        # While using the euclidean clustering
+        if probability_map_img is None:
+            if candidate_px is not None:
+                best_wp_px = candidate_px[best_waypoint_id]
+                best_waypoint_crop_coords = self.map_reader.to_crop_coordinates(current_position, best_wp_px)
+                # spawn candidate px over trajectories map only
+                # set the candidate px spawned trajectories map as global map img
+                for wp_px in candidate_px:
+                    wp_crop_coords = self.map_reader.to_crop_coordinates(current_position, wp_px)
+                    
+                    # plot all waypoints in black
+                    cv2.circle(trajectories_map_img, wp_crop_coords, 3, (0, 0, 0), -1)
+
+                # plot best waypoint in green
+                cv2.circle(trajectories_map_img, best_waypoint_crop_coords, 3, (0, 255, 0), -1)
+            
+            trajectories_map_img_cropped = self.crop_map(trajectories_map_img)
+            
+            # set global map img as trajectories map only
+            global_map_img = trajectories_map_img_cropped
+        
+        # While using the global planner model
+        else:
+            if candidate_px is not None:
+                for wp_px in candidate_px:
+                    wp_crop_coords = self.map_reader.to_crop_coordinates(current_position, wp_px)
+                    cv2.circle(trajectories_map_img, wp_crop_coords, 3, (0, 0, 0), -1)
+                    cv2.circle(probability_map_img, wp_crop_coords, 3, (0, 0, 0), -1)
+                
+                cv2.circle(trajectories_map_img, wp_crop_coords, 3, (0, 255, 0), -1)
+                cv2.circle(probability_map_img, wp_crop_coords, 3, (0, 255, 0), -1)
+
+            probability_map_img_cropped = self.crop_map(probability_map_img)
+            trajectories_map_img_cropped = self.crop_map(trajectories_map_img)
+
+            # concatenate probability map and trajectories map as global map img
+            global_map_img = np.concatenate((probability_map_img_cropped, trajectories_map_img_cropped), axis=1)
+
+        return global_map_img
+
     def crop_map(self, map_img):
         map_height, map_width, _ = map_img.shape
         map_center_y, map_center_x = map_height // 2, map_width // 2
