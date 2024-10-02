@@ -9,7 +9,6 @@ class DeadmanSwitch:
         self.pub = rospy.Publisher('e_stop',
                               Bool,
                               queue_size=1)
-        
 
         self.joy_topic = '/bluetooth_teleop/joy'
         rospy.Subscriber(self.joy_topic,
