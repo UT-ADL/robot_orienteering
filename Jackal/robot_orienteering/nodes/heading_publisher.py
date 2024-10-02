@@ -25,6 +25,7 @@ class HeadingPublisher:
     def limit_angle(self, angle):
         return (angle + 180) % 360 - 180
 
+
     def odom_callback(self, msg):
         # Convert quaternion to euler angles
         quaternion = (msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w)
@@ -40,7 +41,7 @@ class HeadingPublisher:
         current_heading = Float32()
         current_heading.data = gps_heading
         self.current_heading_publisher.publish(current_heading)
-        
+
         
 if __name__ == "__main__":
     rospy.init_node("gps_heading_publisher", log_level=rospy.INFO)
