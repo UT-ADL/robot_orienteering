@@ -33,29 +33,7 @@ from utils.batching import batch_obs_plus_context
 
 from waypoint_planner.model.nomad_onnx import NomadOnnx
 
-
-TRAJECTORIES = np.array([((0,0), (0.93969262, -0.34202014), (2.59807621, -1.5), (3.83022222, -3.21393805)),
-                         ((0,0), (0.98480775, -0.17364818), (2.89777748, -0.77645714), (4.6984631, -1.71010072)),
-                         ((0,0), (1, 0),  (3, 0), (5, 0)),
-                         ((0,0), (0.98480775, 0.17364818), (2.89777748, 0.77645714), (4.6984631, 1.71010072)),
-                         ((0,0), (0.93969262, 0.34202014), (2.59807621, 1.5), (3.83022222, 3.21393805))])
-
 ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png'}
-
-def natural_sort_key(s):
-    return [int(text) if text.isdigit() else text for text in re.split(r'(\d+)', s)]
-
-
-def extract_gps_info(image_stream):
-    tags = exifread.process_file(image_stream)
-    
-    try:
-        lat = [float(x.num) / float(x.den) for x in tags['GPS GPSLatitude'].values]
-        lon = [float(x.num) / float(x.den) for x in tags['GPS GPSLongitude'].values]
-    except KeyError:
-        return None
-    return lat, lon
-
 
 class JackalDrive:
 
@@ -155,7 +133,7 @@ class JackalDrive:
 
         # Extracting the image meta data from image EXIF
         goal_image_names = [img for img in os.listdir(self.goal_image_dir) if os.path.join(self.goal_image_dir, img)]
-        goal_image_names = sorted(goal_image_names, key=natural_sort_key)
+        goal_image_names = sorted(goal_image_names, key=self.natural_sort_key)
         rospy.loginfo(f"goal images retrieved: {goal_image_names}")
 
         self.goal_images = []
@@ -173,7 +151,7 @@ class JackalDrive:
             goal_img = cv2.imread(img_filepath, cv2.IMREAD_COLOR)
             self.goal_images.append(goal_img)
 
-            lat_lon = extract_gps_info(open(img_filepath, 'rb'))
+            lat_lon = self.extract_gps_info(open(img_filepath, 'rb'))
             if not lat_lon:
                 rospy.logerr('Image does not contain GPS information.')
                 rospy.signal_shutdown("No GPS info in image EXIF")
@@ -250,6 +228,47 @@ class JackalDrive:
                           Float32,
                           self.current_heading_callback,
                           queue_size=1)
+
+
+    def create_trajectories(self, radius=[0, 1, 3, 5], theta_limits=[(0, 0), (-20, 20), (-30, 30), (-40, 40)]):
+        """
+        creates 5 distinct fixed trajectories
+        Inputs: 
+            - radius: sets how far the waypoints in the trajectories should be
+            - theta_limits: sets how wide the limits for each radius/circle should be
+        Output: fixed 5 trajectories 
+        """
+        trajectories = []
+
+        for r, angle_limits in zip(radius, theta_limits):
+
+            angle_deg = np.linspace(angle_limits[0], angle_limits[1], 5)
+            angle_rad = np.deg2rad(angle_deg)
+
+            x = r * np.cos(angle_rad)
+            y = r * np.sin(angle_rad)
+
+            coords = np.column_stack((x, y))
+            trajectories.append(coords)
+
+        trajectories = np.array(trajectories)   # shape: 4 X 5 X 2
+        trajectories = np.transpose(trajectories, (1, 0, 2))    # Shape: 5 X 4 X 2 --> % trajectories with 4 coordiantes
+        return trajectories
+
+
+    def natural_sort_key(self, s):
+        return [int(text) if text.isdigit() else text for text in re.split(r'(\d+)', s)]
+
+
+    def extract_gps_info(self, image_stream):
+        tags = exifread.process_file(image_stream)
+        
+        try:
+            lat = [float(x.num) / float(x.den) for x in tags['GPS GPSLatitude'].values]
+            lon = [float(x.num) / float(x.den) for x in tags['GPS GPSLongitude'].values]
+        except KeyError:
+            return None
+        return lat, lon
 
 
     def create_tf_matrix(self, source_frame, target_frame):
@@ -454,7 +473,8 @@ class JackalDrive:
         current_goal_gps = self.goal_gps[self.goal_id]       
 
         if self.use_nomad == False:
-            trajectories = TRAJECTORIES
+            # trajectories = TRAJECTORIES
+            trajectories = self.create_trajectories()
             distance_to_current_goal = self.distance_from_gps(gps_origin=self.current_gps,
                                                           gps_destination=current_goal_gps)
         else:
