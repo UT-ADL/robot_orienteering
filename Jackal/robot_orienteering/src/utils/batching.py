@@ -1,6 +1,6 @@
 # batch observation images + context images
 import numpy as np
-from utils.preprocessing_images import center_crop_and_resize, prepare_image, img_crop_and_resize
+from utils.preprocessing_images import center_crop_and_resize, prepare_image
 
 def batch_obs_plus_context(buffer_length, waypoint_spacing, deque_images, fps, target_size):
     
@@ -9,9 +9,7 @@ def batch_obs_plus_context(buffer_length, waypoint_spacing, deque_images, fps, t
         batch_images = []
         for i in range(0, buffer_length, waypoint_spacing):            
             resized_image = center_crop_and_resize(deque_images[i], target_size)
-            # resized_image = img_crop_and_resize(deque_images[i])
             preprocessed_image = prepare_image(resized_image)
-            # batch_images.append(deque_images[i])
             batch_images.append(preprocessed_image)
         
         obs_plus_context_imgs = np.concatenate(batch_images, axis=1)
