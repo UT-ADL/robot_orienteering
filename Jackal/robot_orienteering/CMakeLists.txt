@@ -218,4 +218,5 @@ catkin_install_python(PROGRAMS
   nodes/deadman_switch.py
   nodes/heading_publisher.py
   nodes/robot_drive.py
+  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
