@@ -27,18 +27,18 @@ from global_planner.data.mapping import MapReader
 from global_planner.models.global_planner_onnx import GlobalPlannerOnnx
 from global_planner.viz.global_planner_viz import GlobalPlannerViz
 
-from utils.viz_util import show_visualization_window
+from utils.viz_util import show_trajectories_projection, show_laser_scan_projection, show_info_overlay, show_next_frame
 from utils.preprocessing_images import center_crop_and_resize, prepare_image
 from utils.batching import batch_obs_plus_context
 
 from waypoint_planner.model.nomad_onnx import NomadOnnx
 
 
-TRAJECTORIES = np.array([((0.93969262, -0.34202014), (2.59807621, -1.5), (3.83022222, -3.21393805)),
-                         ((0.98480775, -0.17364818), (2.89777748, -0.77645714), (4.6984631, -1.71010072)),
-                         ((1, 0),  (3, 0), (5, 0)),
-                         ((0.98480775, 0.17364818), (2.89777748, 0.77645714), (4.6984631, 1.71010072)),
-                         ((0.93969262, 0.34202014), (2.59807621, 1.5), (3.83022222, 3.21393805))])
+TRAJECTORIES = np.array([((0,0), (0.93969262, -0.34202014), (2.59807621, -1.5), (3.83022222, -3.21393805)),
+                         ((0,0), (0.98480775, -0.17364818), (2.89777748, -0.77645714), (4.6984631, -1.71010072)),
+                         ((0,0), (1, 0),  (3, 0), (5, 0)),
+                         ((0,0), (0.98480775, 0.17364818), (2.89777748, 0.77645714), (4.6984631, 1.71010072)),
+                         ((0,0), (0.93969262, 0.34202014), (2.59807621, 1.5), (3.83022222, 3.21393805))])
 
 ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png'}
 
@@ -190,7 +190,6 @@ class JackalDrive:
 
         rospy.loginfo(f"goal gps:\n{self.goal_gps}")
 
-        self.count = 0
         self.goal_id = 0            
 
         self.current_gps = None
@@ -372,7 +371,6 @@ class JackalDrive:
 
         if self.vel is not None:
             self.driving_command_publisher.publish(self.vel)
-            self.count += 1
 
 
     def laser_callback(self, laser_msg):
@@ -503,12 +501,6 @@ class JackalDrive:
             laser_coordinates = None
             collision_free_trajectories = trajectories
 
-        # Set the hybrid apprach using euclidean clusering at first and using global planner later
-        if self.count < 50:
-            self.use_global_planner = False
-        else:
-            self.use_global_planner = True
-
         # Compute the pixel coordinate for goal
         goal_position = self.map_reader.to_px(self.goal_gps[self.goal_id])
 
@@ -522,20 +514,29 @@ class JackalDrive:
         trajectories_map_img = self.global_planner_viz.plot_trajectories_map(self.current_position,
                                                                         goal_position,
                                                                         self.current_heading)
-        # Create probability map
-        probability_map_img = self.global_planner_viz.plot_probability_map(self.current_position, goal_position)
+        
+        # Initialize the probability map and candidate pixel coordiantes as as None
+        # update it if using global planner model
+        probability_map_img = None
+        candidate_px = None
+
+
+        
 
         # # If there are valid waypoints (collision free)
         if collision_free_trajectories.shape[0] > 0:
 
-            # Compute the pixel coordinates of the candidate waypoints
             candidate_waypoints = collision_free_trajectories[:, -1]
             candidate_waypoints_in_gps_frame = self.transform_points(input_points=candidate_waypoints,
                                                                     tf_matrix=self.tf_from_cam_frame_to_gps_frame)
+            
             candidate_gps = self.compute_gps(current_gps=self.current_gps,
                                             waypoints=candidate_waypoints_in_gps_frame)
             
             candidate_gps = candidate_gps.reshape(-1, 2)        
+            
+            # Compute the pixel coordinates of the candidate waypoints
+            # Used for plotting candidate waypoints over both maps (trajectories map + probability map)
             candidate_px = self.map_reader.lat_lon_to_pixel(candidate_gps[:, 0], candidate_gps[:, 1])        
 
             # Compute the individual waypoint's probabilities
@@ -551,7 +552,14 @@ class JackalDrive:
                 best_waypoint_id = np.argmin(distance_goal_to_candidate_waypoints)
             
             # Global planner model based goal heuristic
-            else:            
+            else:
+                # Create probability map
+                probability_map_img = self.global_planner_viz.plot_probability_map(self.current_position, goal_position)
+
+                # Compute the individual waypoint's probabilities
+                wp_prob = self.global_planner.calculate_probs(candidate_px,
+                                                              self.current_position,
+                                                              self.current_heading)
                 best_waypoint_id = np.argmax(wp_prob)
 
             best_trajectory = collision_free_trajectories[best_waypoint_id]
@@ -585,22 +593,84 @@ class JackalDrive:
             self.vel = Twist()
             self.vel.angular.z = w  
         
-        show_visualization_window(current_image=current_image,
-                                  goal_image=self.goal_images[self.goal_id],
-                                  collision_free_trajectories=collision_free_trajectories,
-                                  map_reader=self.map_reader,
-                                  global_planner_viz=self.global_planner_viz,
-                                  current_position=self.current_position,
-                                  candidate_px=candidate_px,
-                                  transform=self.tf_cam2opt_frame,
-                                  camera_model=self.camera_model,
-                                  best_waypoint_id=best_waypoint_id,
-                                  laser_coordinates=laser_coordinates,
-                                  trajectories_map_img=trajectories_map_img,
-                                  probability_map_img=probability_map_img,
-                                  v=v,
-                                  w=w,
-                                  goal_distance=distance_to_current_goal)
+        # While not using global planner model
+        if probability_map_img is None:
+            if candidate_px is not None:
+                best_wp_px = candidate_px[best_waypoint_id]
+                best_waypoint_crop_coords = self.map_reader.to_crop_coordinates(self.current_position, best_wp_px)
+                # spawn candidate px over trajectories map only
+                # set the candidate px spawned trajectories map as global map img
+                for wp_px in candidate_px:
+                    wp_crop_coords = self.map_reader.to_crop_coordinates(self.current_position, wp_px)
+                    
+                    # plot all waypoints in black
+                    cv2.circle(trajectories_map_img, wp_crop_coords, 3, (0, 0, 0), -1)
+
+                # plot best waypoint in green
+                cv2.circle(trajectories_map_img, best_waypoint_crop_coords, 3, (0, 255, 0), -1)
+            
+            trajectories_map_img_cropped = self.global_planner_viz.crop_map(trajectories_map_img)
+            # set global map img as trajectories map only
+            global_map_img = trajectories_map_img_cropped
+        
+        # While using global planner model
+        else:
+            if candidate_px is not None:
+                for wp_px in candidate_px:
+                    wp_crop_coords = self.map_reader.to_crop_coordinates(self.current_position, wp_px)
+                    cv2.circle(trajectories_map_img, wp_crop_coords, 3, (0, 0, 0), -1)
+                    cv2.circle(probability_map_img, wp_crop_coords, 3, (0, 0, 0), -1)
+                
+                cv2.circle(trajectories_map_img, wp_crop_coords, 3, (0, 255, 0), -1)
+                cv2.circle(probability_map_img, wp_crop_coords, 3, (0, 255, 0), -1)
+
+            probability_map_img_cropped = self.global_planner_viz.crop_map(probability_map_img)
+            trajectories_map_img_cropped = self.global_planner_viz.crop_map(trajectories_map_img)
+
+            # concatenate probability map and trajectories map as global map img
+            global_map_img = np.concatenate((probability_map_img_cropped, trajectories_map_img_cropped), axis=1)
+
+        # visualize the global map img on top right corner
+        global_map_height, global_map_width, _ = global_map_img.shape
+        _, width, _ = current_image.shape
+
+        global_map_start_x = width - global_map_width
+        global_map_start_y = 1
+        
+        global_map_img = cv2.cvtColor(global_map_img, cv2.COLOR_BGR2RGB)
+        current_image[global_map_start_y:global_map_start_y+global_map_height, global_map_start_x:width] = global_map_img
+        
+        # visualize goal img just besides the global map img
+        goal_img_resized = cv2.resize(self.goal_images[self.goal_id], (200, 100))
+        goal_img_height, goal_img_width, _ = goal_img_resized.shape
+        
+        goal_img_start_x = global_map_start_x - goal_img_width
+        goal_img_start_y = 1
+        current_image[goal_img_start_y:goal_img_start_y+goal_img_height, goal_img_start_x:goal_img_start_x+goal_img_width] = goal_img_resized
+
+        # visualize trajectories projection (trajectories over current image and top-down view) if there are collision free trajectories
+        if collision_free_trajectories.shape[0] > 0:
+            show_trajectories_projection(current_image=current_image,
+                                         best_waypoint_id=best_waypoint_id,
+                                         collision_free_trajectories=collision_free_trajectories,
+                                         camera_model=self.camera_model,
+                                         transform=self.tf_cam2opt_frame,
+                                         radius=4,
+                                         linewidth=2)
+
+        # visualize laser scan projection (laser scans over current image and top-down view)
+        show_laser_scan_projection(current_image=current_image,
+                                   camera_model=self.camera_model,
+                                   transform=self.tf_cam2opt_frame,
+                                   laser_coordinates=laser_coordinates)
+
+        # Visualize info overlay (velocities, gps distance to goal, mode, # of disengagements)
+        show_info_overlay(frame=current_image,
+                          v=v,
+                          w=w,
+                          goal_distance=distance_to_current_goal)
+        
+        show_next_frame(img=current_image)
         
         # Add the frames to video stream if recording the frames
         if self.record_video:
@@ -621,19 +691,16 @@ class JackalDrive:
             if self.goal_id < self.goal_images.shape[0] - 1:
                 self.goal_id += 1
                 print("switched to next goal")
-                self.count = 0
-        
+                
         # Switch to previous goal image if pressed 'p'
         elif key == ord('p'):
             if self.goal_id > 0:
                 self.goal_id -= 1
                 print("switched to previous goal")
-                self.count = 0
-
+                
         if distance_to_current_goal < self.goal_conditioning_threshold:
             
             self.goal_id += 1
-            self.count = 0
 
             if self.goal_id >= self.goal_images.shape[0]:
                 if self.record_video:
