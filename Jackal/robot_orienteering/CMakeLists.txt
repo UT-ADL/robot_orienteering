@@ -18,7 +18,6 @@ tf2
 tf2_ros
 tf2_geometry_msgs
 nav_msgs
-ros_numpy
 )
 
 ## System dependencies are found with CMake's conventions
