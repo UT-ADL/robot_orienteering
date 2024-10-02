@@ -628,9 +628,11 @@ class JackalDrive:
 
         # visualize laser scan projection (laser scans over current image and top-down view)
         show_laser_scan_projection(current_image=current_image,
+                                   laser_coordinates=laser_coordinates,
                                    camera_model=self.camera_model,
                                    transform=self.tf_cam2opt_frame,
-                                   laser_coordinates=laser_coordinates)
+                                   radius=4,
+                                   linewidth=2)
 
         # Visualize info overlay (velocities, gps distance to goal, mode, # of disengagements)
         show_info_overlay(frame=current_image,
