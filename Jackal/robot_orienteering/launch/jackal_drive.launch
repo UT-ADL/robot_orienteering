@@ -23,7 +23,7 @@
     <arg name='use_laser' default='True' />
     <arg name='use_nomad' default='False' />
 
-    <arg name='node_name' default='jackal_drive.py' />     
+    <arg name='node_name' default='robot_drive.py' />     
 
     <node pkg="robot_orienteering" type="$(arg node_name)" name="inference" required="true" output="screen">
         
@@ -49,7 +49,6 @@
 
         <param name="nomad_conditioning_threshold" value="$(arg nomad_conditioning_threshold)" />
         <param name="gps_conditioning_threshold" value="$(arg gps_conditioning_threshold)" />
-        <param name="goal_heuristic" value="$(arg goal_heuristic)" />
         
         <param name="use_gps" value="$(arg use_gps)" />
         <param name="use_global_planner" value="$(arg use_global_planner)" />
