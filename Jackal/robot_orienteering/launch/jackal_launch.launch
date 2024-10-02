@@ -6,7 +6,10 @@
     <include file="$(find robot_orienteering)/launch/zed_cam_15fps.launch" />
 
     <!-- Xsens device launch -->
-    <include file="$(find xsens_mti_driver)/launch/xsens_mti_node.launch" />
+    <node name="xsens_mti_node" pkg="xsens_mti_driver" type="xsens_mti_node" output="screen">
+        <rosparam command="load" file="$(find robot_orienteering)/param/xsens_mti_node.yaml" />
+        <remap from="/imu/data" to="/xsens_imu/data" />
+    </node>
     
     <!-- run heading publisher node -->
     <node pkg="robot_orienteering" type="heading_publisher.py" name="gps_heading_publisher" required="true">
