@@ -19,9 +19,9 @@ from shapely import LineString
 import imghdr
 import exifread
 
-from std_msgs.msg import Float32
 from sensor_msgs.msg import CameraInfo, Image, LaserScan 
 from geometry_msgs.msg import Twist, Vector3Stamped
+from nav_msgs.msg import Odometry
 
 from global_planner.data.mapping import MapReader
 from global_planner.models.global_planner_onnx import GlobalPlannerOnnx
@@ -67,6 +67,8 @@ class JackalDrive:
         self.use_global_planner = bool(rospy.get_param('~use_global_planner', False))
         self.use_nomad = bool(rospy.get_param('~use_nomad', False))
         
+        self.initial_heading = float(rospy.get_param('~initial_heading'))
+
         rospy.loginfo(f"use_global_planner: {self.use_global_planner}")
         rospy.loginfo(f"use_laser: {self.use_laser}")
         rospy.loginfo(f"use_nomad: {self.use_nomad}")
@@ -217,17 +219,15 @@ class JackalDrive:
                         self.laser_callback,
                         queue_size=1)
         
-        # self.current_gps = None
         rospy.Subscriber('/filter/positionlla',
                           Vector3Stamped,
                           self.gps_callback,
                           queue_size=1)
 
-        # self.current_heading = None
-        rospy.Subscriber('/current_heading',
-                          Float32,
-                          self.current_heading_callback,
-                          queue_size=1)
+        rospy.Subscriber('/zed/zed_node/odom', 
+                         Odometry, 
+                         self.odom_callback, 
+                         queue_size=1)
 
 
     def create_trajectories(self, radius=[0, 1, 3, 5], theta_limits=[(0, 0), (-20, 20), (-30, 30), (-40, 40)]):
@@ -269,6 +269,10 @@ class JackalDrive:
         except KeyError:
             return None
         return lat, lon
+
+
+    def limit_angle(self, angle):
+        return (angle + 180) % 360 - 180
 
 
     def create_tf_matrix(self, source_frame, target_frame):
@@ -387,9 +391,6 @@ class JackalDrive:
         
         self.current_image = img
 
-        if self.vel is not None:
-            self.driving_command_publisher.publish(self.vel)
-
 
     def laser_callback(self, laser_msg):
         ranges = laser_msg.ranges
@@ -446,9 +447,23 @@ class JackalDrive:
         self.current_position = self.map_reader.to_px(self.current_gps)
 
 
-    def current_heading_callback(self, msg):
-        self.current_heading = msg.data    
+    def odom_callback(self,msg):
+        # Convert quaternion to euler angles
+        quaternion = (msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w)
+        euler = tf.transformations.euler_from_quaternion(quaternion)
 
+        # Extract yaw (z-axis rotation) and convert to degrees
+        yaw = euler[2]  # Yaw is the third element (index 2)
+        yaw_degrees = np.degrees(yaw)
+
+        gps_heading = self.initial_heading - yaw_degrees
+        gps_heading = self.limit_angle(gps_heading)
+
+        self.current_heading = gps_heading
+
+        # Publish velocities 
+        if self.vel is not None:
+            self.driving_command_publisher.publish(self.vel)
 
     def timer_callback(self, event=None):
         
