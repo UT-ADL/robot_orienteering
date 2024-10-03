@@ -1,22 +1,115 @@
 <launch>
 
+    <arg name="play_bag" default="False" />
+    <arg name="bag_filepath" default="/home/adl/robot_ws/new_bags/delta_park_rec_2024-09-11-14-01-30.bag" />
+
+    <arg name='goal_image_dir' default='$(find robot_orienteering)/data/delta_demo_images' />
+
+    <arg name='config_dir_path' default='$(find robot_orienteering)/config' />
+
+    <arg name='local_model_type' default='nomad' doc='gnm, vint, nomad' />
+    <arg name='local_model_path' default='$(find robot_orienteering)/data/onnx_models' />
+
+    <arg name='global_model_path' default='$(find robot_orienteering)/data/onnx_models/distance_segment.onnx' />
+    <arg name='map_path' default='$(find robot_orienteering)/data/maps' />
+    <arg name='map_name' default='Delta' />
+
+    <arg name='fps' default='15' />
+    <arg name='timer_frequency' default='10' />
+    <arg name='record_video' default='' />
+
+    <arg name='nomad_conditioning_threshold' default='3' />
+    <arg name='gps_conditioning_threshold' default='10' />  
+
+    <arg name='use_gps' default='True' />
+    <arg name='use_global_planner' default='False' />
+    <arg name='use_laser' default='True' />
+    <arg name='use_nomad' default='False' />
+
     <arg name='initial_heading' default='0' />
 
-    <!-- ZED launch -->
-    <include file="$(find robot_orienteering)/launch/zed_cam_15fps.launch" />
+    <arg name='node_name' default='robot_drive.py' />
 
-    <!-- Xsens device launch -->
-    <node name="xsens_mti_node" pkg="xsens_mti_driver" type="xsens_mti_node" output="screen">
-        <rosparam command="load" file="$(find robot_orienteering)/param/xsens_mti_node.yaml" />
-        <remap from="/imu/data" to="/xsens_imu/data" />
+    <!-- Play ros bag with all topics if validating off-policy -->
+    <!-- "play_bag" arg must be set to True along wih the "bag_filepath" arg pointing to the bag file you're playing -->
+    <group if="$(arg play_bag)">
+        <node pkg="rosbag" type="play" name="rosbag_play" output="screen" args="$(arg bag_filepath) --pause" />
+    </group>
+
+    <!-- Run all required packages if running on-policy -->
+    <group unless="$(arg play_bag)">
+
+        <!-- ZED Wrapper -->
+        <!-- ******************************************************************************************************************************************* -->
+        <!-- Setting the static tf between robot's base link and zed camera's base link -->
+        <include file="$(find zed_wrapper)/launch/zed.launch">        
+            <arg name="cam_pos_x" value="0.2200" />
+            <arg name="cam_pos_y" value="0.0110" />
+            <arg name="cam_pos_z" value="0.305" />
+            <arg name="cam_roll" value="0.0" />
+            <arg name="cam_pitch" value="0.0" />
+            <arg name="cam_yaw" value="0.0" />
+        </include>
+
+        <param name="/zed/zed_node/pos_tracking/publish_map_tf" type="Bool" value="false" />
+        <param name="/zed/zed_node/pos_tracking/publish_tf" type="Bool" value="false" />
+        <param name="/zed/zed_node/pos_tracking/pos_tracking_enabled" type="Bool" value="false" /> 
+        <!-- ******************************************************************************************************************************************* -->
+
+        <!-- xsens driver -->
+        <!-- ******************************************************************************************************************************************* -->
+        <node pkg="tf2_ros" type="static_transform_publisher" name="gps_frame_transform" args="-0.05 0 0.41 0 0 0 1 chassis_link gps_frame" />
+        <node name="xsens_mti_node" pkg="xsens_mti_driver" type="xsens_mti_node" output="screen">
+            <rosparam command="load" file="$(find robot_orienteering)/param/xsens_mti_node.yaml" />
+            <remap from="/imu/data" to="/xsens_imu/data" />
+        </node>
+        <!-- ******************************************************************************************************************************************* -->
+
+        <!-- Deadman switch -->
+        <node pkg="robot_orienteering" type="deadman_switch.py" name="deadman_switch" />
+
+    </group>
+
+    <!-- Retreive the laser scan from depth image -->
+    <node pkg="depthimage_to_laserscan" type="depthimage_to_laserscan" name="depthimage_to_laserscan">
+        <remap from='image' to='/zed/zed_node/depth/depth_registered' />
+        <remap from='/camera_info' to='/zed/zed_node/depth/camera_info' />
+        
+        <param name="scan_height" value="4" />
+        <param name="scan_time" value="0.1" />
+        <param name="output_frame_id" value="zed_left_camera_frame" />
     </node>
-    
-    <!-- run heading publisher node -->
-    <node pkg="robot_orienteering" type="heading_publisher.py" name="gps_heading_publisher" required="true">
+
+    <!-- Run the robot navigation node -->
+    <node pkg="robot_orienteering" type="$(arg node_name)" name="inference" required="true" output="screen">
+        <param name="goal_image_dir" value="$(arg goal_image_dir)" />
+        <param name="config_dir_path" value="$(arg config_dir_path)" />
+
+        <param name="local_model_type" value="$(arg local_model_type)" />
+        <param name="local_model_path" value="$(arg local_model_path)" />
+
+        <param name="global_model_path" value="$(arg global_model_path)" />
+        <param name="map_path" value="$(arg map_path)" />
+        <param name="map_name" value="$(arg map_name)" />
+        
+        <param name="fps" value="$(arg fps)" />
+        <param name="record_video" value="$(arg record_video)" />
+        <param name="timer_frequency" value="$(arg timer_frequency)" />
+        
+        <param name="base_link_frame" value="base_link" />
+        <param name="gps_frame" value="gps_frame" />
+        <param name="left_camera_frame" value="zed_left_camera_frame" />
+        <param name="left_camera_optical_frame" value="zed_left_camera_optical_frame" />
+
+        <param name="nomad_conditioning_threshold" value="$(arg nomad_conditioning_threshold)" />
+        <param name="gps_conditioning_threshold" value="$(arg gps_conditioning_threshold)" />
+        
+        <param name="use_gps" value="$(arg use_gps)" />
+        <param name="use_global_planner" value="$(arg use_global_planner)" />
+        <param name="use_laser" value="$(arg use_laser)" />
+        <param name="use_nomad" value="$(arg use_nomad)" />
+
         <param name="initial_heading" value="$(arg initial_heading)" />
     </node>
-
-    <!-- run deadman_switch node -->
-    <node pkg="robot_orienteering" type="deadman_switch.py" name="deadman_switch" />
 
 </launch>
