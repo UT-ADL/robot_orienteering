@@ -20,7 +20,7 @@ In order to run the baseline models/nodes, there are a few prerequisite packages
 
 #### ZED ROS driver (driver for ZED camera)
 To install the ZED ROS driver and use the ZED camera (any ZED family: ZED, ZED_mini, ZED2, ZED2i, etc.), the zed-ros-driver needs to be installed.   
-To install the ZED ROS driver, please follow the [Getting Started with ROS and ZED](https://www.stereolabs.com/docs/ros) instructions.
+To install the ZED ROS driver, please follow the [Getting Started with ROS and ZED](https://www.stereolabs.com/docs/ros) instructions.   
 **Note: Please go for the ZED SDK 4.1 and not for the latest ZED SDK 4.2**
 
 
