@@ -45,60 +45,64 @@ catkin build
 source devel/setup.bash
 ```
 
-## Running the baseline nodes
+## Running the baseline node/s
 
-### Launching the robot
-Once all packages are installed, you are ready to deploy the baseline node on the robot in real-time.   
-
-To launch it on-policy, in one of the terminal windows please run the following command:   
-  
+The launch file `jakal_launch.launch` inside the launch directory runs all necessary nodes from the respective pakages. To run this launch file, from the catkin workspace root directory, run the command:   
 ```
-roslaunch robot_orienteering jackal_launch.launch
+roslaunch robot_orienteering jackal_launch.launch <arg1> <arg2> ...
 ```
 
-This launch file launches:
-- `zed camera node` to run the ZED camera in 15 fps
-- `xsens node` to run the Xsens MTi-G710 GNSS/INS device to get the INS fused GPS coordiantes
-- `heading publiher node` to update the GPS heading using the ZED camera's visual odometry
-- `deadman switch node` which acts as a software emergency switch which enables the safety driver to take over manual control if needed
+There is a whole list of arguments that can be passed on to this launch file. The main baseline(robot navigation) node takes in some arguments based on which the beahavor of the node might differ, These arguments include:   
+- `goal_image_dir`: Points to the directory where all the goal images that form the track for the robot to follow sequentially. Goal images are located inside this directory, namely: "Goal_1.jpg", "Goal_2.jpg", ...   
+- `confg_dir_path`: Points to the directory where all configuration files are located   
+- `local_model_type`: Sets which local planner model to use if using a neural network based waypoint proposal   
+- `local_model_path`: Sets the path to the ONNX model file that will be used (local planner model)   
+- `global_model_path`: Sets the path to the global planner ONNX model file which computes the goal heuristic based on robot's current position and goal position   
+- `map_path`: Points to the directory where all kinds of maps are located (orienteering, baseelev, etc.)   
+- `map_name`: Sets the basename of the map   
+- `fps`: Sets the fps for camera (runs either in 15 fps or 4 fps)   
+- `timer_frequency`: Sets the frequency in Hz for running the planner and goal heuristic computations   
+- `record_video`: If input, records the entire visualization window into a mp4 viedo file. An entire absolute filepath needs to be input if recording the video   
+- `nomad_conditioning_threshold`: Sets the threshold value for conditioning according to NoMaD's temporal distance predictions   
+- `gps_conditioning_threshold`: Sets the distance threshold for gps distance-based goal conditioning   
+- `use_nomad`: If True, runs NoMaD to propose the potential waypoints. Else, uses 5 fixed trajectories for the robot to follow   
+- `use_gps`: If True, uses gps distance-based conditioning. Else, uses NoMaD's temporal distance predictions to condition the goal   
+- `use_laser`: If True, uses the laser scan projection retrieved from the ZED camera's depth map fo collision avoidance. Else, the collision avoidance is absent   
+- `use_global_planner`: If True, uses the global planner model to compute the goal heuristic for proposed waypoints. Else, uses euclidean distance-based goal heuristic   
+- `initial_heading`: Sets the initial gps-heading (angle w.r.t. Magnetic North)
+- `node_name`: Sets which node to run (can be useful when there are multiple nodes)
 
-This launch file takes one command line argument:
-- `initial_heading`: sets the initial heading to the user-input value. If not passed, sets the initial heading to zero (Magentic North)
+In general, the navigation node can be run without even setting these arguments manually, as they are launched with some default values. However, these can be tweaked while running the launch file.
 
-This launch file sets the robot to publish all necessary messges in corresponding topics for the baseline node to subsribe and act accodingly
+#### While playing with ros bag (off-policy)
+Before deploying the baseline(robot navigation) node on the robot straight away, it is a very good practice to validate how the node works while playing with a ros bag where all required messges in the correct topics are published. This shows the shortcomings of the code and also acts as a debgging tool.   
 
-### Running the baseline node
-In another terminal window, please run the following command:
-```
-roslaunch robot_orienteering jackal_drive.launch
-```
+In order to run the node with a ros bag, the following arguments must be set (remaining can be set as default):
+- `play_bag`: If True, sets the condition to run with a bag file   
+- `bag_filepath`: Sets the path to the bag file that will be played   
 
-This launch file runs the `robot_drive` node which subscribes to the required topics and retrieves the camera image, INS fused GPS coordiantes, current GPS heading and the state of the deadman switch.
+#### While running live (on-policy)
+Once it is validated that the node runs smoothly with the bag file, it is worth trying to see how well it itegrates with te robot in real-time. To do that, the argument `play_bag` must be set to False.   
 
-By default, this node proposes 5 fixed trajectories and uses the euclidean distance between the waypoints and the goal (GPS-based distance) and chooses the one closest to the goal. Once chosen, then it navigates towards that waypoint in each iteration.   
+While running the nodes live, it lanches 4 things:
+1. `zed camera node` to run the ZED camera in 15 fps
+2. `xsens node` to run the Xsens MTi-G710 GNSS/INS device to get the INS fused GPS coordiantes
+3. `deadman switch node` which acts as a software emergency switch which enables the safety driver to take over manual control if needed
+4. `robot navigation node` which subscribes to all reuired messages and lets the robot navigte through all goal points
 
-However, it can be set as command line argument on how to propose the trajectories and which heuristic to use.   
 
-The list of command line arguments that can be passes on while running this launch files is listed below:   
+## Examples running the launch file with different settings (arguments)
 
-#### Waypoints proposal
+### Example using fixed trajectories for waypoints proposal and using the euclidean distance-based heuristic with ros bag
+`roslaunch robot_orienteering jackal_launch.launch play_bag:=True bag_filepath:=<absolute path to the bag file>`
 
-By default, it proposes 5 fixed trajectories to follow, but it can be changed by passing different argeuments.   
+### Example using fixed trajectories for waypoints proposal and using the global planner model on-policy
+`roslaunch robot_orienteering jackal_launch.launch use_global_planner:=True use_nomad:=True`
 
-- `use_nomad`: If `True`, then it uses nomad to propose trajectories   
-`roslaunch robot_orienteering jackal_drive.launch use_nomad:=True`
-
-#### Goal huristic
-
-- `use_global_planner`: If `True`, then it uses the global planner heuristic model and choose the waypoint which has the highest probability based on the global planner predictions. Else, it uses the euclidean distance between the waypoints and the goal, and chooses the waypoint which is closest to the goal.
-`roslaunch robot_orienteering jackal_drive.launch use_global_planner:=True`
-
-#### Example using NoMaD for waypoints proposal and using the global planner heuristic model
+### Example using NoMaD for waypoints proposal and using the  euclidean distance-based heuristic on-policy
 `roslaunch robot_orienteering jackal_drive.launch use_global_planner:=True use_nomad:=True`
 
-#### Additional utilities
-You can also record the live camera feed with additional visulizations using the `record_video` argument.   
-Example usage:   
-`roslaunch robot_orienteering jackal_drive.launch record_video:=/home/test_video.mp4`
+### Example using fixed trajectories for waypoints proposal nd using the euclidean distance-based heuristic on-policy recording the live visualization
+`roslaunch robot_orienteering jackal_drive.launch record_video:=<absolute path where the video mp4 file should be saved>`
 
 
