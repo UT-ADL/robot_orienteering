@@ -72,7 +72,7 @@
 
     <!-- Retreive the laser scan from depth image -->
     <node pkg="depthimage_to_laserscan" type="depthimage_to_laserscan" name="depthimage_to_laserscan">
-        <remap from='image' to='/zed/zed_node/depth/depth_registered' />
+        <remap from='/image' to='/zed/zed_node/depth/depth_registered' />
         <remap from='/camera_info' to='/zed/zed_node/depth/camera_info' />
         
         <param name="scan_height" value="4" />
