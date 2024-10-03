@@ -25,7 +25,7 @@ To install the ZED ROS driver, please follow the [Getting Started with ROS and Z
 
 
 #### xsens_mti_driver (driver for the GNSS/INS device)
-To install the xsens_mti_driver, please go through the [offial documentation](https://wiki.ros.org/xsens_mti_driver) of the xsens_mti_driver package. The package can be installed by cloning the github repo for the [xsens_mti_driver](https://github.com/nobleo/xsens_mti_driver).
+To install the xsens_mti_driver, please go through the [offcial documentation](https://wiki.ros.org/xsens_mti_driver) of the xsens_mti_driver package. The package can be installed by cloning the github repo for the [xsens_mti_driver](https://github.com/nobleo/xsens_mti_driver).
 
 
 Once the prerequisite packages are installed, you can move forward to install the main package `robot_orienteering`. 
