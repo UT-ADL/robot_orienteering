@@ -1,7 +1,6 @@
 # robot_orienteering
 Robot orienteering baselines
 
-
 ## Installation
 
 **All packages should be located inside the `src` directory of the catkin workspace.**   
@@ -14,18 +13,22 @@ cd robot_orienteering_ws/src
 
 Now, all the ros packages should be present in this `src` directory.
 
+
 ### Prerequisite Packages
-In order to run the baseline models/nodes, there are a few prerequisite packages that needs to be installed. These necessary pacages are listed below with instructions (or links to the instructions) on how to install them.
+In order to run the baseline models/nodes, there are a few prerequisite packages that needs to be installed. These necessary packages are listed below with instructions (or links to the instructions) on how to install them.
+
 
 #### ZED ROS driver (driver for ZED camera)
-To install the ZED ROS driver and use the ZED camera (any ZED family: ZED, ZED_mini, ZED2, ZED2i, etc.), the zed-ros-driver needs to be isntalled.   
-To install the ZED ROS driver, please follow the [Getting Started with ROS and ZED](https://www.stereolabs.com/docs/ros)  instructions.
+To install the ZED ROS driver and use the ZED camera (any ZED family: ZED, ZED_mini, ZED2, ZED2i, etc.), the zed-ros-driver needs to be installed.   
+To install the ZED ROS driver, please follow the [Getting Started with ROS and ZED](https://www.stereolabs.com/docs/ros) instructions.
+**Note: Please go for the ZED SDK 4.1 and not for the latest ZED SDK 4.2**
+
 
 #### xsens_mti_driver (driver for the GNSS/INS device)
 To install the xsens_mti_driver, please go through the [offial documentation](https://wiki.ros.org/xsens_mti_driver) of the xsens_mti_driver package. The package can be installed by cloning the github repo for the [xsens_mti_driver](https://github.com/nobleo/xsens_mti_driver).
 
 
-Once the prerequisite packages and installed, you can move forward to install the main package `robot_orienteering`. 
+Once the prerequisite packages are installed, you can move forward to install the main package `robot_orienteering`. 
 **Please note that the src directory at this point should already contain some packages**
 - zed-ros-wrapper   
 - xsens_mti_driver   
@@ -93,16 +96,14 @@ While running the nodes live, it lanches 4 things:
 
 ## Examples running the launch file with different settings (arguments)
 
-### Example using fixed trajectories for waypoints proposal and using the euclidean distance-based heuristic with ros bag
+### Example using fixed trajectories for waypoints proposal and using the euclidean distance-based heuristic while playing the ros bag
 `roslaunch robot_orienteering jackal_launch.launch play_bag:=True bag_filepath:=<absolute path to the bag file>`
 
 ### Example using fixed trajectories for waypoints proposal and using the global planner model on-policy
 `roslaunch robot_orienteering jackal_launch.launch use_global_planner:=True use_nomad:=True`
 
 ### Example using NoMaD for waypoints proposal and using the  euclidean distance-based heuristic on-policy
-`roslaunch robot_orienteering jackal_drive.launch use_global_planner:=True use_nomad:=True`
+`roslaunch robot_orienteering jackal_launch.launch use_global_planner:=True use_nomad:=True`
 
 ### Example using fixed trajectories for waypoints proposal nd using the euclidean distance-based heuristic on-policy recording the live visualization
-`roslaunch robot_orienteering jackal_drive.launch record_video:=<absolute path where the video mp4 file should be saved>`
-
-
+`roslaunch robot_orienteering jackal_launch.launch record_video:=<absolute path where the video mp4 file should be saved>`
