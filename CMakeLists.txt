@@ -215,8 +215,8 @@ include_directories(
 # catkin_add_nosetests(test)
 
 catkin_install_python(PROGRAMS
-  nodes/deadman_switch.py
-  nodes/heading_publisher.py
+  nodes/deadman_switch.py  
   nodes/robot_drive.py
+  nodes/gps_parser.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
