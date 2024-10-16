@@ -213,6 +213,7 @@ class JackalDrive:
 
         self.manual_time = 0
         self.total_time_elapsed = 0
+        self.autonomy_percentage = None
 
         self.joy_msg = None
 
@@ -400,18 +401,20 @@ class JackalDrive:
         return np.squeeze(d)
         
 
-    def write_output_summary(self, output_dir, num_goals_completed, num_disengagements, time_disengagements, total_time_elapsed):
+    def write_output_summary(self, output_dir, num_goals_completed, num_disengagements, time_disengagements, total_time_elapsed, autonomy_percentage):
 
-        line_1 = f"# of goals compelted: {num_goals_completed}"
+        line_1 = f"# of goals completed: {num_goals_completed}"
         line_2 = f"# of disengagements: {num_disengagements}"
-        line_3 = f"Disengagement time: {time_disengagements}"
-        line_4 = f"Total time elapsed: {total_time_elapsed}"
+        line_3 = f"Disengagement time: {time_disengagements} Seconds"
+        line_4 = f"Total time elapsed: {total_time_elapsed} Seconds"
+        line_5 = f"Autonomy percentage: {autonomy_percentage} %"
 
         lines = [
             f"{line_1}\n",
             f"{line_2}\n",
             f"{line_3}\n",
-            f"{line_4}"
+            f"{line_4}\n",
+            f"{line_5}"
         ]
 
         output_filepath = os.path.join(output_dir, str(time())+'.txt')
@@ -547,9 +550,7 @@ class JackalDrive:
         else:
             self.drive_mode = "Automatic"
 
-        if self.drive_mode == "Manual":
-            # self.disengagement_timesteps += 1
-            # self.disengagement_time = time() - self.disengagement_time_start  
+        if self.drive_mode == "Manual":             
             self.manual_time += time() - self.ref_time
             self.ref_time = time()
         ################################################################################
@@ -742,6 +743,8 @@ class JackalDrive:
         
         self.total_time_elapsed = time() - self.start_time
 
+        autonomy_percentage = (self.total_time_elapsed - self.manual_time)/self.total_time_elapsed * 100
+
         # Visualize info overlay (velocities, gps distance to goal, mode, # of disengagements)
         show_info_overlay(frame=current_image,
                           v=v,
@@ -750,7 +753,8 @@ class JackalDrive:
                           drive_mode=self.drive_mode,
                           num_disengagements=self.disengagement_count, 
                           manual_drive_time=self.manual_time, 
-                          total_time_elapsed=self.total_time_elapsed)
+                          total_time_elapsed=self.total_time_elapsed,
+                          autonomy_percentage=autonomy_percentage)
         
         show_next_frame(img=current_image)
         
@@ -767,7 +771,8 @@ class JackalDrive:
                                       num_goals_completed=self.num_goals_completed,
                                       num_disengagements=self.disengagement_count,
                                       time_disengagements=self.manual_time,
-                                      total_time_elapsed=self.total_time_elapsed)
+                                      total_time_elapsed=self.total_time_elapsed,
+                                      autonomy_percentage=autonomy_percentage)
 
             if self.record_video:
                 self.video.release()
@@ -796,7 +801,8 @@ class JackalDrive:
                                           num_goals_completed=self.num_goals_completed,
                                           num_disengagements=self.disengagement_count,
                                           time_disengagements=self.manual_time,
-                                          total_time_elapsed=self.total_time_elapsed)
+                                          total_time_elapsed=self.total_time_elapsed,
+                                          autonomy_percentage=autonomy_percentage)
 
                 if self.record_video:
                     self.video.release()
