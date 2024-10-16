@@ -48,6 +48,12 @@ catkin build
 source devel/setup.bash
 ```
 
+### Getting the ONNX models
+There are some neural network models that might be and can be used in this package. These models are not included in the repository by default, but can be downloaded.   
+
+To download these models, you can go to [this link](https://www.dropbox.com/scl/fo/w1nszcr5y0zo60baey44c/AHrKN-KOKl0nJ7rqsocb_L0?rlkey=hh2eucrnfi2o8rqr13991bbpp&st=u22f4t6s&dl=0), download all **.onnx** files and copy those to the `data/onnx_models` directory.   
+
+
 ## Running the baseline node/s
 
 The launch file `jakal_launch.launch` inside the launch directory runs all necessary nodes from the respective pakages. To run this launch file, from the catkin workspace root directory, run the command:   
