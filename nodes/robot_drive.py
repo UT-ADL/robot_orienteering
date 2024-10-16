@@ -51,6 +51,7 @@ class JackalDrive:
         self.global_model_path = rospy.get_param('~global_model_path')
         self.map_path = rospy.get_param('~map_path')
         self.map_name = rospy.get_param('~map_name')
+        self.map_extension = rospy.get_param('~map_extension')
         
         self.base_link_frame = rospy.get_param('~base_link_frame')
         self.gps_frame = rospy.get_param('~gps_frame')
@@ -93,7 +94,7 @@ class JackalDrive:
 
         # Load global planner map
         map_type = self.global_planner_config["map_type"]
-        map_file_path = os.path.join(self.map_path, f"{self.map_name}_{map_type}.tif")
+        map_file_path = os.path.join(self.map_path, f"{self.map_name}_{map_type}.{self.map_extension}")
         self.map_reader = MapReader(map_file_path, self.global_planner_config["map_size"])
         rospy.loginfo(f"Loaded global planner map: {map_file_path}")
         rospy.loginfo(f"Map resolution: {self.map_reader.map_resolution}")
