@@ -1,7 +1,8 @@
 <launch>
 
+    <!-- Set the arguments value/s to be used later -->
     <arg name="play_bag" default="False" />
-    <arg name="bag_filepath" default="/home/adl/robot_ws/new_bags/delta_park_rec_2024-09-11-14-01-30.bag" />
+    <arg name="bag_filepath" default="/home/adl/robot_orienteering_ws/delta_2024-10-15-14-15-06.bag" />
 
     <arg name='goal_image_dir' default='$(find robot_orienteering)/data/delta_demo_images' />
 
@@ -27,14 +28,16 @@
     <arg name='use_nomad' default='False' />
 
     <arg name='initial_heading' default='0' />
-
     <arg name='node_name' default='robot_drive.py' />
+    <arg name='output_dir' default='$(find robot_orienteering)/output' />
+
 
     <!-- Play ros bag with all topics if validating off-policy -->
     <!-- "play_bag" arg must be set to True along wih the "bag_filepath" arg pointing to the bag file you're playing -->
     <group if="$(arg play_bag)">
-        <node pkg="rosbag" type="play" name="rosbag_play" output="screen" args="$(arg bag_filepath) --pause" />
+        <node pkg="rosbag" type="play" name="rosbag_play" args="$(arg bag_filepath) --pause --delay 5" />
     </group>
+
 
     <!-- Run all required packages if running on-policy -->
     <group unless="$(arg play_bag)">
@@ -57,13 +60,15 @@
         <!-- ******************************************************************************************************************************************* -->
 
         <!-- xsens driver -->
-        <!-- ******************************************************************************************************************************************* -->
-        <node pkg="tf2_ros" type="static_transform_publisher" name="gps_frame_transform" args="-0.05 0 0.41 0 0 0 1 chassis_link gps_frame" />
+        <!-- ******************************************************************************************************************************************* -->        
         <node name="xsens_mti_node" pkg="xsens_mti_driver" type="xsens_mti_node" output="screen">
             <rosparam command="load" file="$(find robot_orienteering)/param/xsens_mti_node.yaml" />
             <remap from="/imu/data" to="/xsens_imu/data" />
         </node>
         <!-- ******************************************************************************************************************************************* -->
+
+        <!-- Transform between the Jackal chasis and the Xsens GPS receiver -->
+        <node pkg="tf2_ros" type="static_transform_publisher" name="gps_frame_transform" args="-0.05 0 0.41 0 0 0 1 chassis_link gps_frame" />
 
         <!-- Deadman switch -->
         <node pkg="robot_orienteering" type="deadman_switch.py" name="deadman_switch" />
@@ -110,6 +115,8 @@
         <param name="use_nomad" value="$(arg use_nomad)" />
 
         <param name="initial_heading" value="$(arg initial_heading)" />
+        <param name="output_dir" value="$(arg output_dir)" />
+
     </node>
 
 </launch>
