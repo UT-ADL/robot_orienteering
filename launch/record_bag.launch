@@ -18,12 +18,14 @@
     <!-- ******************************************************************************************************************************************* -->
 
     <!-- xsens driver -->
-    <!-- ******************************************************************************************************************************************* -->
-    <node pkg="tf2_ros" type="static_transform_publisher" name="gps_frame_transform" args="-0.05 0 0.41 0 0 0 1 chassis_link gps_frame" />
+    <!-- ******************************************************************************************************************************************* -->    
     <node name="xsens_mti_node" pkg="xsens_mti_driver" type="xsens_mti_node" output="screen">
         <rosparam command="load" file="$(find robot_orienteering)/param/xsens_mti_node.yaml" />
         <remap from="/imu/data" to="/xsens_imu/data" />
     </node>
     <!-- ******************************************************************************************************************************************* -->
+
+    <!-- Transform between the chassis link of Jackal and the Xsens GPS receiver -->
+    <node pkg="tf2_ros" type="static_transform_publisher" name="gps_frame_transform" args="-0.05 0 0.41 0 0 0 1 chassis_link gps_frame" />
 
 </launch>
