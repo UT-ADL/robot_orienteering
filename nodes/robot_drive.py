@@ -52,10 +52,10 @@ class JackalDrive:
         self.map_path = rospy.get_param('~map_path')
         self.map_name = rospy.get_param('~map_name')
         
-        self.base_link_frame = rospy.get_param('~base_link_frame', 'base_link_frame')
+        self.base_link_frame = rospy.get_param('~base_link_frame')
         self.gps_frame = rospy.get_param('~gps_frame')
-        self.left_camera_frame = rospy.get_param('~left_camera_frame', 'zed2i_left_camera_frame')
-        self.left_camera_optical_frame = rospy.get_param('~left_camera_optical_frame', 'zed2i_left_camera_optical_frame')
+        self.left_camera_frame = rospy.get_param('~left_camera_frame',)
+        self.left_camera_optical_frame = rospy.get_param('~left_camera_optical_frame')
         
         self.fps = int(rospy.get_param('~fps'))     
         self.record_video = rospy.get_param('~record_video')
@@ -68,7 +68,7 @@ class JackalDrive:
         self.use_global_planner = bool(rospy.get_param('~use_global_planner', False))
         self.use_nomad = bool(rospy.get_param('~use_nomad', False))
         
-        self.output_dir = rospy.get_param('~output_dir', 'output_dir')
+        self.output_dir = rospy.get_param('~output_dir')
         self.initial_heading = float(rospy.get_param('~initial_heading'))
 
         rospy.loginfo(f"use_global_planner: {self.use_global_planner}")
@@ -85,8 +85,7 @@ class JackalDrive:
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
         self.bridge = CvBridge()
 
-        # Load global planner configration
-        # global_planner_config_file = os.path.join(self.config_dir_path, 'distance_segment.yaml')
+        # Load global planner configration        
         global_planner_config_file = os.path.join(self.config_dir_path, 'default_segment.yaml')
         with open(global_planner_config_file, "r") as f:
             self.global_planner_config = yaml.safe_load(f)
