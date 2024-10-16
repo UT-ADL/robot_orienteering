@@ -14,6 +14,7 @@
     <arg name='global_model_path' default='$(find robot_orienteering)/data/onnx_models/distance_segment.onnx' />
     <arg name='map_path' default='$(find robot_orienteering)/data/maps' />
     <arg name='map_name' default='Delta' />
+    <arg name='map_extension' default='tif' />
 
     <arg name='fps' default='15' />
     <arg name='timer_frequency' default='10' />
@@ -96,6 +97,7 @@
         <param name="global_model_path" value="$(arg global_model_path)" />
         <param name="map_path" value="$(arg map_path)" />
         <param name="map_name" value="$(arg map_name)" />
+        <param name="map_extension" value="$(arg map_extension)" />
         
         <param name="fps" value="$(arg fps)" />
         <param name="record_video" value="$(arg record_video)" />
