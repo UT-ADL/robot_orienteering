@@ -36,8 +36,6 @@ from waypoint_planner.model.nomad_onnx import NomadOnnx
 
 ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png'}
 
-JOY_CALLBACK_FREQUENCY = 45 # Hz
-
 class JackalDrive:
 
     def __init__(self):
