@@ -6,7 +6,6 @@ from collections import deque
 import cv2
 import numpy as np
 import re
-from time import time
 from datetime import datetime
 
 import rospy
@@ -333,13 +332,9 @@ class JackalDrive:
         """
         input_points = input_points.reshape(-1, 2)
         points_in_source_frame = np.ones(shape=(input_points.shape[0], 4))
-        # print(points_in_target_frame.shape)
         
         points_in_source_frame[:, :2] = input_points
-
         points_in_target_frame = np.dot(points_in_source_frame, tf_matrix.T)
-        # points_in_target_frame = np.dot(tf_matrix, points_in_target_frame.T)
-        # points_in_target_frame = points_in_target_frame.T
 
         return np.squeeze(points_in_target_frame[:, :2])
     
@@ -530,13 +525,13 @@ class JackalDrive:
         if self.use_nomad == True and len(self.deque_images) < self.buffer_length:
             rospy.loginfo_throttle(5, "Input image buffer filling up ...")
             return
-        
+        # trajectories = TRAJECTORIES
         if self.joy_msg is None:
             rospy.loginfo("Joy msg from PS4 Joystick not received ..")
             return
         
         if self.start_time is None:
-            self.start_time = time()
+            self.start_time = rospy.Time.now().to_sec()
             rospy.loginfo(f"start time: {self.start_time}")
 
         ##############################################################################
@@ -545,24 +540,23 @@ class JackalDrive:
         # When manual mode button press
         if joy_msg.buttons[4] == 1.0 or joy_msg.buttons[5] == 1.0:
             if self.drive_mode == "Automatic":
-                self.disengagement_count += 1
-                self.ref_time = time()                
+                self.disengagement_count += 1                                
+                self.ref_time = rospy.Time.now().to_sec()               
                 self.drive_mode = "Manual"
         
         else:
             self.drive_mode = "Automatic"
 
         if self.drive_mode == "Manual":             
-            self.manual_time += time() - self.ref_time
-            self.ref_time = time()
+            self.manual_time += rospy.Time.now().to_sec() - self.ref_time
+            self.ref_time = rospy.Time.now().to_sec()
         ################################################################################
 
         # robot_drive_mode = self.drive_mode
         current_image = self.current_image
         current_goal_gps = self.goal_gps[self.goal_id]       
 
-        if self.use_nomad == False:
-            # trajectories = TRAJECTORIES
+        if self.use_nomad == False:            
             trajectories = self.create_trajectories()
             distance_to_current_goal = self.distance_from_gps(gps_origin=self.current_gps,
                                                           gps_destination=current_goal_gps)
@@ -579,7 +573,6 @@ class JackalDrive:
 
             local_model_out = self.local_session.predict(obs_tensor=obs_img, goal_tensor=goal_img_preprocessed)
 
-            # print(local_model_out)
             temporal_distance_prediction = local_model_out[0].squeeze()
             action_predictions = local_model_out[1][:, :, :2].squeeze()
 
@@ -743,8 +736,7 @@ class JackalDrive:
                                    radius=4,
                                    linewidth=2)
         
-        self.total_time_elapsed = time() - self.start_time
-
+        self.total_time_elapsed = rospy.Time.now().to_sec() - self.start_time
         autonomy_percentage = (self.total_time_elapsed - self.manual_time)/self.total_time_elapsed * 100
 
         # Visualize info overlay (velocities, gps distance to goal, mode, # of disengagements)
