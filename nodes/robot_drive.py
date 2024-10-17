@@ -7,6 +7,7 @@ import cv2
 import numpy as np
 import re
 from time import time
+from datetime import datetime
 
 import rospy
 from cv_bridge import CvBridge
@@ -251,7 +252,7 @@ class JackalDrive:
                          self.joy_callback)
 
 
-    def create_trajectories(self, radius=[0.0001, 1, 3, 5], theta_limits=[(0.0001, 0.001), (-20, 20), (-30, 30), (-40, 40)]):    
+    def create_trajectories(self, radius=[0.0001, 1, 3, 5], theta_limits=[(0, 0), (-20, 20), (-30, 30), (-40, 40)]):
         """
         creates 5 distinct fixed trajectories
         Inputs: 
@@ -418,7 +419,7 @@ class JackalDrive:
             f"{line_5}"
         ]
 
-        output_filepath = os.path.join(output_dir, str(time())+'.txt')
+        output_filepath = os.path.join(output_dir, "result_" + str(datetime.now())+'.txt')
         with open(output_filepath, 'w') as file:
             file.writelines(lines)
 
