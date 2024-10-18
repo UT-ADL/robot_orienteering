@@ -10,7 +10,7 @@ BLUE = (255, 0, 0)
 YELLOW = (0, 255, 255)
 
 TOP_DOWN_VIEW_SCALE = 14
-CURRENT_TOP_DOWN_POS = (200, 160)
+CURRENT_TOP_DOWN_POS = (210, 160)
 
 def draw_rectangle(frame, x, y, w, h):
     sub_img = frame[y:y+h, x:x+w]
@@ -31,9 +31,9 @@ def rectify_image(camera_model, img):
     return rectified_image
 
 
-def show_info_overlay(frame, v, w, goal_distance, drive_mode, num_disengagements, manual_drive_time, total_time_elapsed, autonomy_percentage, font_size=FONT_SIZE):
+def show_info_overlay(frame, v, w, goal_distance, drive_mode, num_goals_completed, total_goals, num_disengagements, manual_drive_time, total_time_elapsed, autonomy_percentage, font_size=FONT_SIZE):
         
-        draw_rectangle(frame, 5, 5, 295, 180)
+        draw_rectangle(frame, 5, 5, 300, 200)
 
         cv2.putText(frame, 'Driving Commands:', (10, 15),
                     cv2.FONT_HERSHEY_SIMPLEX, font_size, YELLOW, 1, cv2.LINE_AA)
@@ -45,13 +45,15 @@ def show_info_overlay(frame, v, w, goal_distance, drive_mode, num_disengagements
                     cv2.FONT_HERSHEY_SIMPLEX, font_size, YELLOW, 1, cv2.LINE_AA)        
         cv2.putText(frame, f'Drive Mode: {drive_mode}', (10, 95),
                     cv2.FONT_HERSHEY_SIMPLEX, font_size, YELLOW, 1, cv2.LINE_AA)
-        cv2.putText(frame, f'Disengagements: {num_disengagements}', (10, 115),
+        cv2.putText(frame, f'Goals completed: {num_goals_completed}/{total_goals}', (10, 115),
                     cv2.FONT_HERSHEY_SIMPLEX, font_size, YELLOW, 1, cv2.LINE_AA)
-        cv2.putText(frame, 'Manaul Drive Time: {:.2f} Sec'.format(manual_drive_time), (10, 135),
+        cv2.putText(frame, f'Disengagements: {num_disengagements}', (10, 135),
                     cv2.FONT_HERSHEY_SIMPLEX, font_size, YELLOW, 1, cv2.LINE_AA)
-        cv2.putText(frame, 'Total Time Elapsed: {:.2f} Sec'.format(total_time_elapsed), (10, 155),
+        cv2.putText(frame, 'Manaul Drive Time: {:.2f} Sec'.format(manual_drive_time), (10, 155),
                     cv2.FONT_HERSHEY_SIMPLEX, font_size, YELLOW, 1, cv2.LINE_AA)
-        cv2.putText(frame, 'Autonomy: {:.2f} %'.format(autonomy_percentage), (10, 175),
+        cv2.putText(frame, 'Total Time Elapsed: {:.2f} Sec'.format(total_time_elapsed), (10, 175),
+                    cv2.FONT_HERSHEY_SIMPLEX, font_size, YELLOW, 1, cv2.LINE_AA)
+        cv2.putText(frame, 'Autonomy: {:.2f} %'.format(autonomy_percentage), (10, 195),
                     cv2.FONT_HERSHEY_SIMPLEX, font_size, YELLOW, 1, cv2.LINE_AA)
 
 
