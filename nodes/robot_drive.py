@@ -755,6 +755,8 @@ class JackalDrive:
                           w=w,
                           goal_distance=distance_to_current_goal,
                           drive_mode=self.drive_mode,
+                          num_goals_completed=self.num_goals_completed,
+                          total_goals=self.goal_images.shape[0],
                           num_disengagements=self.disengagement_count, 
                           manual_drive_time=self.manual_time, 
                           total_time_elapsed=self.total_time_elapsed,
