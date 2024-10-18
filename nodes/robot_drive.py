@@ -20,6 +20,7 @@ from shapely import LineString
 import imghdr
 import exifread
 
+from std_msgs.msg import Bool
 from sensor_msgs.msg import CameraInfo, Image, LaserScan, Joy 
 from geometry_msgs.msg import Twist, Vector3Stamped
 from nav_msgs.msg import Odometry
@@ -217,6 +218,7 @@ class JackalDrive:
         self.autonomy_percentage = None
 
         self.joy_msg = None
+        self.e_stop_msg = None
 
         # Initialize ROS publishers and subscribers
         self.driving_command_publisher = rospy.Publisher('cmd_vel',
@@ -249,6 +251,10 @@ class JackalDrive:
         rospy.Subscriber('/bluetooth_teleop/joy',
                          Joy,
                          self.joy_callback)
+        
+        rospy.Subscriber('/e_stop',
+                         Bool,
+                         self.e_stop_callback)
 
 
     def create_trajectories(self, radius=[0.0001, 1, 3, 5], theta_limits=[(0, 0), (-20, 20), (-30, 30), (-40, 40)]):
@@ -506,7 +512,37 @@ class JackalDrive:
 
     def joy_callback(self, msg):
         self.joy_msg = msg
+    
+
+    def e_stop_callback(self, msg):
+
+        if self.joy_msg is None:
+            rospy.loginfo("Joy msg from PS4 Joystick not received ..")
+            return
+
+        if self.start_time is None:
+            self.start_time = rospy.Time.now().to_sec()
+            rospy.loginfo(f"start time: {self.start_time}")
+
+        self.e_stop_msg = msg.data
+        joy_msg = self.joy_msg
+
+        # When manual mode button press
+        if joy_msg.buttons[4] == 1.0 or joy_msg.buttons[5] == 1.0:
+            if self.drive_mode == "Automatic":
+                self.disengagement_count += 1                                
+                self.ref_time = rospy.Time.now().to_sec()               
+                self.drive_mode = "Manual"
         
+        else:
+            self.drive_mode = "Automatic"
+
+        if self.drive_mode == "Manual":             
+            self.manual_time += rospy.Time.now().to_sec() - self.ref_time
+            self.ref_time = rospy.Time.now().to_sec()
+
+        self.total_time_elapsed = rospy.Time.now().to_sec() - self.start_time
+        self.autonomy_percentage = (self.total_time_elapsed - self.manual_time)/self.total_time_elapsed * 100
 
     def timer_callback(self, event=None):
         
@@ -525,34 +561,11 @@ class JackalDrive:
         if self.use_nomad == True and len(self.deque_images) < self.buffer_length:
             rospy.loginfo_throttle(5, "Input image buffer filling up ...")
             return
-        # trajectories = TRAJECTORIES
-        if self.joy_msg is None:
-            rospy.loginfo("Joy msg from PS4 Joystick not received ..")
+        
+        if self.e_stop_msg is None:
+            rospy.loginfo("Deadman switch status not received ..")
             return
-        
-        if self.start_time is None:
-            self.start_time = rospy.Time.now().to_sec()
-            rospy.loginfo(f"start time: {self.start_time}")
-
-        ##############################################################################
-        joy_msg = self.joy_msg
-
-        # When manual mode button press
-        if joy_msg.buttons[4] == 1.0 or joy_msg.buttons[5] == 1.0:
-            if self.drive_mode == "Automatic":
-                self.disengagement_count += 1                                
-                self.ref_time = rospy.Time.now().to_sec()               
-                self.drive_mode = "Manual"
-        
-        else:
-            self.drive_mode = "Automatic"
-
-        if self.drive_mode == "Manual":             
-            self.manual_time += rospy.Time.now().to_sec() - self.ref_time
-            self.ref_time = rospy.Time.now().to_sec()
-        ################################################################################
-
-        # robot_drive_mode = self.drive_mode
+       
         current_image = self.current_image
         current_goal_gps = self.goal_gps[self.goal_id]       
 
@@ -735,9 +748,6 @@ class JackalDrive:
                                    transform=self.tf_cam2opt_frame,
                                    radius=4,
                                    linewidth=2)
-        
-        self.total_time_elapsed = rospy.Time.now().to_sec() - self.start_time
-        autonomy_percentage = (self.total_time_elapsed - self.manual_time)/self.total_time_elapsed * 100
 
         # Visualize info overlay (velocities, gps distance to goal, mode, # of disengagements)
         show_info_overlay(frame=current_image,
@@ -748,7 +758,7 @@ class JackalDrive:
                           num_disengagements=self.disengagement_count, 
                           manual_drive_time=self.manual_time, 
                           total_time_elapsed=self.total_time_elapsed,
-                          autonomy_percentage=autonomy_percentage)
+                          autonomy_percentage=self.autonomy_percentage)
         
         show_next_frame(img=current_image)
         
@@ -766,9 +776,13 @@ class JackalDrive:
                                       num_disengagements=self.disengagement_count,
                                       time_disengagements=self.manual_time,
                                       total_time_elapsed=self.total_time_elapsed,
-                                      autonomy_percentage=autonomy_percentage)
+                                      autonomy_percentage=self.autonomy_percentage)
 
             if self.record_video:
+                # put the last viz image for 30 frames in the end when it stops
+                for i in range(30):
+                    self.video.write(current_image)
+
                 self.video.release()
             cv2.destroyAllWindows()
             rospy.signal_shutdown("User pressed ESC")
@@ -796,9 +810,13 @@ class JackalDrive:
                                           num_disengagements=self.disengagement_count,
                                           time_disengagements=self.manual_time,
                                           total_time_elapsed=self.total_time_elapsed,
-                                          autonomy_percentage=autonomy_percentage)
+                                          autonomy_percentage=self.autonomy_percentage)
 
                 if self.record_video:
+                    # put the last viz image for 30 frames in the end when it stops
+                    for i in range(30):
+                        self.video.write(current_image)
+
                     self.video.release()
                 cv2.destroyAllWindows()
                 rospy.loginfo("Completed all goals !!")                                
