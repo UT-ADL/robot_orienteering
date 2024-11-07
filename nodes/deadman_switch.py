@@ -19,11 +19,11 @@ class DeadmanSwitch:
     def joy_callback(self, joy_msg):
         
         # If the PS4 joystick loses connection, true is published to e_stop topic
-        # Setting robot into idle mode
+        # Setting robot into idle mode if connection lost
         if joy_msg.axes[2] == 0.0 and joy_msg.axes[-1] == 0.0:
             self.bool_msg = True
         
-        # Manually shutdown the node
+        # Manually shutdown the node with triangle button
         if joy_msg.buttons[3] == 1.0:
             rospy.signal_shutdown("deadman switch active ..")
             self.bool_msg = False

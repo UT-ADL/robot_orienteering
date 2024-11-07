@@ -18,14 +18,22 @@ def convert_to_decimal(degree_min, direction):
     """
     if not degree_min or not direction:
         return None
-    
-    degrees = float(degree_min[:2])
-    minutes = float(degree_min[2:])
+    degree_min = float(degree_min)
+    # print(degree_min)
+    degrees = int(degree_min/100)
+    minutes = degree_min - degrees * 100
+
+    # print(degrees)
+    # print(minutes)
+
+    # degrees = float(degree_min[:2])
+    # minutes = float(degree_min[2:])
     decimal = degrees + (minutes / 60)
 
     if direction == 'S' or direction == 'W':
         decimal = -decimal
     
+    print(decimal)
     return decimal
 
 
@@ -63,7 +71,7 @@ def parse_uniheadinga(sentence):
     match = re.match(pattern, sentence)
     
     if match:
-        heading = float(match.group(10))  # Heading in degrees
+        heading = float(match.group(11))  # Heading in degrees
         return heading
     else:
         rospy.logwarn("Invalid or unmatched UNIHEADINGA sentence")
@@ -101,7 +109,8 @@ def read_serial_data():
             try:
                 # Read a line from the serial port
                 line = ser.readline().decode('ascii', errors='ignore').strip()
-                
+                print(line)
+
                 if line.startswith('$GNGGA'):
                     # Parse GGA message (Position Fix Data)
                     gps_data = parse_gga(line)
