@@ -42,8 +42,6 @@ class JackalDrive:
 
         # Fetch parameters
         self.goal_image_dir = rospy.get_param('~goal_image_dir')
-        self.goal_gps_filepath = rospy.get_param('~goal_gps_filepath')
-        self.goal_gps_xml_filepath = rospy.get_param('~goal_gps_xml_filepath')
 
         self.config_dir_path = rospy.get_param('~config_dir_path')
 
