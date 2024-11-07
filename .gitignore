@@ -7,4 +7,5 @@ data/vikerkaare_orienteering
 output
 scripts
 src/global_planner/data/__pycache__
+src/global_planner/viz/__pycache__
 src/utils/__pycache__
