@@ -6,7 +6,6 @@ from collections import deque
 import cv2
 import numpy as np
 import re
-from datetime import datetime
 
 import rospy
 from cv_bridge import CvBridge
@@ -23,7 +22,6 @@ import exifread
 from std_msgs.msg import Bool
 from sensor_msgs.msg import CameraInfo, Image, LaserScan, Joy 
 from geometry_msgs.msg import Twist, Vector3Stamped
-from nav_msgs.msg import Odometry
 
 from global_planner.data.mapping import MapReader
 from global_planner.models.global_planner_onnx import GlobalPlannerOnnx
@@ -36,6 +34,7 @@ from utils.batching import batch_obs_plus_context
 from waypoint_planner.model.nomad_onnx import NomadOnnx
 
 ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png'}
+ALPHA = 0.7
 
 class JackalDrive:
 
@@ -43,6 +42,8 @@ class JackalDrive:
 
         # Fetch parameters
         self.goal_image_dir = rospy.get_param('~goal_image_dir')
+        self.goal_gps_filepath = rospy.get_param('~goal_gps_filepath')
+        self.goal_gps_xml_filepath = rospy.get_param('~goal_gps_xml_filepath')
 
         self.config_dir_path = rospy.get_param('~config_dir_path')
 
@@ -56,7 +57,7 @@ class JackalDrive:
         
         self.base_link_frame = rospy.get_param('~base_link_frame')
         self.gps_frame = rospy.get_param('~gps_frame')
-        self.left_camera_frame = rospy.get_param('~left_camera_frame',)
+        self.left_camera_frame = rospy.get_param('~left_camera_frame')
         self.left_camera_optical_frame = rospy.get_param('~left_camera_optical_frame')
         
         self.fps = int(rospy.get_param('~fps'))     
@@ -70,12 +71,19 @@ class JackalDrive:
         self.use_global_planner = bool(rospy.get_param('~use_global_planner', False))
         self.use_nomad = bool(rospy.get_param('~use_nomad', False))
         
-        self.output_dir = rospy.get_param('~output_dir')
-        self.initial_heading = float(rospy.get_param('~initial_heading'))
-
         rospy.loginfo(f"use_global_planner: {self.use_global_planner}")
         rospy.loginfo(f"use_laser: {self.use_laser}")
         rospy.loginfo(f"use_nomad: {self.use_nomad}")
+
+        self.output_dir = rospy.get_param('~output_dir')
+        self.output_filename = rospy.get_param('~output_filename')
+
+        if self.output_filename:
+            self.output_filepath = os.path.join(self.output_dir, self.output_filename)
+        else:
+            self.output_filepath = None
+
+        self.num_trajectories = int(rospy.get_param('~num_trajectories'))
 
         if self.use_nomad:
             self.goal_conditioning_threshold = self.nomad_conditioning_threshold
@@ -121,7 +129,6 @@ class JackalDrive:
         rospy.loginfo(f"Observation size: {self.img_size}")
 
         self.local_session = NomadOnnx(self.local_model_path)
-
         rospy.loginfo(f"Loaded local planner model: {self.local_model_path}")
 
         if self.fps == 15:
@@ -174,11 +181,7 @@ class JackalDrive:
 
         self.goal_id = 0            
 
-        self.current_gps = None
-        self.current_position = None
-        self.current_heading = None
-        
-        rospy.loginfo("Goal gps converted to pixel coordinates")
+        # rospy.loginfo("Goal gps converted to pixel coordinates")
 
         # Load camera model
         camera_info_msg = rospy.wait_for_message('/zed/zed_node/left_raw/camera_info', CameraInfo)
@@ -204,8 +207,7 @@ class JackalDrive:
         self.tf_cam2opt_frame = self.create_tf_matrix(source_frame=self.left_camera_frame,
                                                       target_frame=self.left_camera_optical_frame)
 
-
-        self.drive_mode = "Automatic"   # By default, the drive mode is automatic --> When manually overtaken, it changes to manual
+        self.drive_mode = "Automatic"   # By default, the drive mode is automatic --> When manually overtaken, it changes to "Manual"
 
         self.start_time = None
         self.ref_time = None
@@ -213,17 +215,39 @@ class JackalDrive:
         self.num_goals_completed = 0
         self.disengagement_count = 0
 
-        self.manual_time = 0
+        self.manual_drive_time = 0
         self.total_time_elapsed = 0
         self.autonomy_percentage = None
 
         self.joy_msg = None
         self.e_stop_msg = None
 
+        self.prev_gps = None
+        self.current_gps = None
+        self.current_position = None
+        self.prev_heading = None
+        self.current_heading = None
+
+        self.init_gps_time = None
+        self.prev_gps_time = None
+
+        self.initial_heading = None
+        self.init_gps_list = []        
+
+        self.init_time = rospy.Time.now().to_sec()
+        self.last_checkpoint_completed_time = np.NaN
+
+        self.prev_pose = None
+        self.current_pose = None
+
         # Initialize ROS publishers and subscribers
-        self.driving_command_publisher = rospy.Publisher('cmd_vel',
+        self.driving_command_publisher = rospy.Publisher('/cmd_vel',
                                                           Twist,
                                                           queue_size=1)
+        
+        self.e_stop_publisher = rospy.Publisher('/e_stop',
+                              Bool,
+                              queue_size=1)
         
         rospy.Timer(rospy.Duration(1.0/self.timer_frequency), self.timer_callback)
         
@@ -242,11 +266,6 @@ class JackalDrive:
                           Vector3Stamped,
                           self.gps_callback,
                           queue_size=1)
-
-        rospy.Subscriber('/zed/zed_node/odom',
-                         Odometry,
-                         self.odom_callback,
-                         queue_size=1)
         
         rospy.Subscriber('/bluetooth_teleop/joy',
                          Joy,
@@ -269,7 +288,7 @@ class JackalDrive:
 
         for r, angle_limits in zip(radius, theta_limits):
 
-            angle_deg = np.linspace(angle_limits[0], angle_limits[1], 5)
+            angle_deg = np.linspace(angle_limits[0], angle_limits[1], self.num_trajectories)
             angle_rad = np.deg2rad(angle_deg)
 
             x = r * np.cos(angle_rad)
@@ -278,8 +297,8 @@ class JackalDrive:
             coords = np.column_stack((x, y))
             trajectories.append(coords)
 
-        trajectories = np.array(trajectories)   # shape: 4 X 5 X 2
-        trajectories = np.transpose(trajectories, (1, 0, 2))    # Shape: 5 X 4 X 2 --> % trajectories with 4 coordinates
+        trajectories = np.array(trajectories)   # shape: 4 X N X 2
+        trajectories = np.transpose(trajectories, (1, 0, 2))    # Shape: N X 4 X 2 --> % trajectories with 4 coordinates
         return trajectories
 
 
@@ -402,27 +421,59 @@ class JackalDrive:
         d = R * c
         
         return np.squeeze(d)
+    
+    
+    def transform(self, lat, lon):
+
+        coords = self.transformer.transform(lat, lon)
+
+        easting = coords[0]
+        northing = coords[1]
+
+        return easting, northing
+    
+
+    def compute_heading_north(self, init_gps, final_gps):
         
+        init_gps = init_gps.reshape(-1, 2)
+        final_gps = final_gps.reshape(-1, 2)
 
-    def write_output_summary(self, output_dir, num_goals_completed, num_disengagements, time_disengagements, total_time_elapsed, autonomy_percentage):
+        init_gps_rad = np.deg2rad(init_gps)
+        final_gps_rad = np.deg2rad(final_gps)
 
-        line_1 = f"# of goals completed: {num_goals_completed}"
-        line_2 = f"# of disengagements: {num_disengagements}"
-        line_3 = f"Disengagement time: {time_disengagements} Seconds"
-        line_4 = f"Total time elapsed: {total_time_elapsed} Seconds"
-        line_5 = f"Autonomy percentage: {autonomy_percentage} %"
+        delta_lon = final_gps_rad[:,1] - init_gps_rad[:,1]
 
-        lines = [
-            f"{line_1}\n",
-            f"{line_2}\n",
-            f"{line_3}\n",
-            f"{line_4}\n",
-            f"{line_5}"
-        ]
+        # Calculate the difference in distances
+        delta_x = np.cos(final_gps_rad[:, 0]) * np.sin(delta_lon)
+        delta_y = np.cos(init_gps_rad[:, 0]) * np.sin(final_gps_rad[:, 0]) - np.sin(init_gps_rad[:, 0]) * np.cos(final_gps_rad[:, 0]) * np.cos(delta_lon)
 
-        output_filepath = os.path.join(output_dir, "result_" + str(datetime.now())+'.txt')
-        with open(output_filepath, 'w') as file:
-            file.writelines(lines)
+        bearing_rad = np.arctan2(delta_x, delta_y)
+        bearing_degrees = np.rad2deg(bearing_rad)
+
+        bearing_degrees[bearing_degrees < -180] += 360
+        bearing_degrees[bearing_degrees >  180] -= 360
+
+        return np.squeeze(bearing_degrees)
+    
+    
+    def write_output_summary(self, output_filepath, num_goals_completed, num_disengagements, time_disengagements, time_to_complete_last_checkpoint, total_time_elapsed, autonomy_percentage):
+
+        if self.output_filepath is None:
+            return
+
+        num_goals_completed = float(num_goals_completed)
+        num_disengagements = float(num_disengagements)
+
+        data = np.array([[num_goals_completed, num_disengagements, time_disengagements, time_to_complete_last_checkpoint, total_time_elapsed, autonomy_percentage]])
+        # data = np.reshape((len(data), 1))
+        
+        if os.path.exists(output_filepath):
+            with open(output_filepath, 'ab') as file:
+                np.savetxt(file, data, delimiter=",", fmt="%.4f")
+        else:
+            header = "num_goals_completed,num_disengagements,time_disengagements,time_to_complete_last_checkpoint,total_time_elapsed,autonomy_percentage"
+            with open(output_filepath, 'wb') as file:
+                np.savetxt(file, data, delimiter=",", fmt="%.4f", header=header, comments="")
 
 
     def image_callback(self, img_msg):
@@ -434,6 +485,18 @@ class JackalDrive:
             self.deque_images.append(img)
         
         self.current_image = img
+
+        # Publish velocities 
+        if self.vel is not None:
+            self.driving_command_publisher.publish(self.vel)
+
+
+    def odom_callback(self, msg):
+        
+        if self.prev_pose is None:
+            self.prev_pose = np.array([msg.pose.pose.position.x, msg.pose.pose.position.y])
+        
+        self.current_pose = np.array([msg.pose.pose.position.x, msg.pose.pose.position.y])
 
 
     def laser_callback(self, laser_msg):
@@ -490,24 +553,26 @@ class JackalDrive:
         self.current_gps = np.array([msg.vector.x, msg.vector.y])
         self.current_position = self.map_reader.to_px(self.current_gps)
 
+        if self.prev_gps is None:
+            self.prev_gps = self.current_gps
 
-    def odom_callback(self,msg):
-        # Convert quaternion to euler angles
-        quaternion = (msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w)
-        euler = tf.transformations.euler_from_quaternion(quaternion)
+        if self.prev_gps_time is None:
+            self.prev_gps_time = rospy.Time.now().to_sec()
+        
+        current_heading = self.compute_heading_north(init_gps=self.prev_gps,
+                                                     final_gps=self.current_gps)
+        
+        if self.prev_heading is None:
+            self.prev_heading = current_heading
 
-        # Extract yaw (z-axis rotation) and convert to degrees
-        yaw = euler[2]  # Yaw is the third element (index 2)
-        yaw_degrees = np.degrees(yaw)
+        if rospy.Time.now().to_sec() - self.prev_gps_time >= 0.2:
 
-        gps_heading = self.initial_heading - yaw_degrees
-        gps_heading = self.limit_angle(gps_heading)
+            self.current_heading = ALPHA * current_heading + (1-ALPHA) * self.prev_heading
 
-        self.current_heading = gps_heading
+            self.prev_gps = self.current_gps
+            self.prev_heading = current_heading
 
-        # Publish velocities 
-        if self.vel is not None:
-            self.driving_command_publisher.publish(self.vel)
+            self.prev_gps_time = rospy.Time.now().to_sec()
 
 
     def joy_callback(self, msg):
@@ -515,14 +580,9 @@ class JackalDrive:
     
 
     def e_stop_callback(self, msg):
-
         if self.joy_msg is None:
             rospy.loginfo("Joy msg from PS4 Joystick not received ..")
             return
-
-        if self.start_time is None:
-            self.start_time = rospy.Time.now().to_sec()
-            rospy.loginfo(f"start time: {self.start_time}")
 
         self.e_stop_msg = msg.data
         joy_msg = self.joy_msg
@@ -538,14 +598,16 @@ class JackalDrive:
             self.drive_mode = "Automatic"
 
         if self.drive_mode == "Manual":             
-            self.manual_time += rospy.Time.now().to_sec() - self.ref_time
+            self.manual_drive_time += rospy.Time.now().to_sec() - self.ref_time
             self.ref_time = rospy.Time.now().to_sec()
 
-        self.total_time_elapsed = rospy.Time.now().to_sec() - self.start_time
-        self.autonomy_percentage = (self.total_time_elapsed - self.manual_time)/self.total_time_elapsed * 100
+        # self.total_time_elapsed = rospy.Time.now().to_sec() - self.start_time
+        self.total_time_elapsed = rospy.Time.now().to_sec() - self.init_time
+        self.autonomy_percentage = (self.total_time_elapsed - self.manual_drive_time)/self.total_time_elapsed * 100
+
 
     def timer_callback(self, event=None):
-        
+
         if self.laser_linestring is None:
             rospy.loginfo_throttle(5, "laser scan not received")
             return
@@ -565,7 +627,7 @@ class JackalDrive:
         if self.e_stop_msg is None:
             rospy.loginfo("Deadman switch status not received ..")
             return
-       
+
         current_image = self.current_image
         current_goal_gps = self.goal_gps[self.goal_id]       
 
@@ -602,7 +664,7 @@ class JackalDrive:
             for trajectory in trajectories: 
 
                 trajectory_linestring = LineString(trajectory)                                 
-                trajectory_buffer = trajectory_linestring.buffer(0.5)
+                trajectory_buffer = trajectory_linestring.buffer(0.4)
 
                 intersects = trajectory_buffer.intersects(laser_linestring)
                 
@@ -615,6 +677,7 @@ class JackalDrive:
             laser_coordinates = None
             collision_free_trajectories = trajectories
 
+        # Robot pos, relative waypoints and GPS heading visualization
         # Compute the pixel coordinate for goal
         goal_position = self.map_reader.to_px(self.goal_gps[self.goal_id])
 
@@ -629,20 +692,20 @@ class JackalDrive:
                                                                         goal_position,
                                                                         self.current_heading)
         
-        # Initialize the probability map and candidate pixel coordiantes as as None
+        # Initialize the probability map and candidate pixel coordinates as as None
         # update it if using global planner model
         probability_map_img = None
         candidate_px = None
-
-        # # If there are valid waypoints (collision free)
+        
+        # If there are valid waypoints (collision free)
         if collision_free_trajectories.shape[0] > 0:
 
             candidate_waypoints = collision_free_trajectories[:, -1]
             candidate_waypoints_in_gps_frame = self.transform_points(input_points=candidate_waypoints,
-                                                                    tf_matrix=self.tf_from_cam_frame_to_gps_frame)
+                                                                     tf_matrix=self.tf_from_cam_frame_to_gps_frame)
             
             candidate_gps = self.compute_gps(current_gps=self.current_gps,
-                                            waypoints=candidate_waypoints_in_gps_frame)
+                                             waypoints=candidate_waypoints_in_gps_frame)
             
             candidate_gps = candidate_gps.reshape(-1, 2)        
             
@@ -652,14 +715,14 @@ class JackalDrive:
 
             # Compute the individual waypoint's probabilities
             wp_prob = self.global_planner.calculate_probs(candidate_px,
-                                                        self.current_position,
-                                                        self.current_heading)
+                                                          self.current_position,
+                                                          self.current_heading)
             
             # Select the best waypoint from all proposed waypoints
             # Euclidean clustering
             if self.use_global_planner == False:
                 distance_goal_to_candidate_waypoints = self.distance_from_gps(gps_origin=candidate_gps,
-                                                                            gps_destination=self.goal_gps[self.goal_id])
+                                                                              gps_destination=self.goal_gps[self.goal_id])
                 best_waypoint_id = np.argmin(distance_goal_to_candidate_waypoints)
             
             # Global planner model based goal heuristic
@@ -672,18 +735,17 @@ class JackalDrive:
                                                               self.current_position,
                                                               self.current_heading)
                 best_waypoint_id = np.argmax(wp_prob)
-
+            
             best_trajectory = collision_free_trajectories[best_waypoint_id]
 
             goal_x, goal_y = best_trajectory[-1]
-
             dist = np.sqrt((goal_x**2) + (goal_y**2))            
             theta = np.arctan2(goal_y, goal_x)
 
             v = dist
             w = theta
 
-            v = np.clip(v, 0, 0.3)
+            v = np.clip(v, 0, 0.4)
             w = np.clip(w, -0.3, 0.3)
 
             # Publish driving command
@@ -692,8 +754,7 @@ class JackalDrive:
             self.vel.angular.z = w
         
         # If there are no valid waypoints, turn counter-clockwise 
-        else:
-            
+        else:            
             rospy.loginfo("No collision free trajectory detected. Robot turning counter-clockwise...")
             candidate_px = None
             best_waypoint_id = None
@@ -728,10 +789,12 @@ class JackalDrive:
         goal_img_height, goal_img_width, _ = goal_img_resized.shape
         
         goal_img_start_x = global_map_start_x - goal_img_width
+        # # When no global map img
+        # goal_img_start_x = current_image.shape[1] - 10 - goal_img_width
         goal_img_start_y = 1
         current_image[goal_img_start_y:goal_img_start_y+goal_img_height, goal_img_start_x:goal_img_start_x+goal_img_width] = goal_img_resized
 
-        # visualize trajectories projection (trajectories over current image and top-down view) if there are collision free trajectories
+        # Visualize trajectories projection (trajectories over current image and top-down view) if there are collision free trajectories
         if collision_free_trajectories.shape[0] > 0:
             show_trajectories_projection(current_image=current_image,
                                          best_waypoint_id=best_waypoint_id,
@@ -741,7 +804,7 @@ class JackalDrive:
                                          radius=4,
                                          linewidth=2)
 
-        # visualize laser scan projection (laser scans over current image and top-down view)
+        # Visualize laser scan projection (laser scans over current image and top-down view)
         show_laser_scan_projection(current_image=current_image,
                                    laser_coordinates=laser_coordinates,
                                    camera_model=self.camera_model,
@@ -757,13 +820,13 @@ class JackalDrive:
                           drive_mode=self.drive_mode,
                           num_goals_completed=self.num_goals_completed,
                           total_goals=self.goal_images.shape[0],
-                          num_disengagements=self.disengagement_count, 
-                          manual_drive_time=self.manual_time, 
+                          num_disengagements=self.disengagement_count,
+                          manual_drive_time=self.manual_drive_time,
                           total_time_elapsed=self.total_time_elapsed,
                           autonomy_percentage=self.autonomy_percentage)
         
         show_next_frame(img=current_image)
-        
+
         # Add the frames to video stream if recording the frames
         if self.record_video:
                 self.video.write(current_image)
@@ -772,20 +835,25 @@ class JackalDrive:
         key = cv2.waitKey(1)
         
         # Shutdown all visualization windows and node if pressed 'ESC'
-        if key == 27:            
-            self.write_output_summary(output_dir=self.output_dir,
+        if key == 27:
+            
+            self.total_time_elapsed = rospy.Time.now().to_sec - self.init_time
+
+            self.write_output_summary(output_filepath=self.output_filepath,
                                       num_goals_completed=self.num_goals_completed,
                                       num_disengagements=self.disengagement_count,
-                                      time_disengagements=self.manual_time,
+                                      time_disengagements=self.manual_drive_time,
+                                      time_to_complete_last_checkpoint=self.last_checkpoint_completed_time,
                                       total_time_elapsed=self.total_time_elapsed,
                                       autonomy_percentage=self.autonomy_percentage)
-
+            
             if self.record_video:
                 # put the last viz image for 30 frames in the end when it stops
                 for i in range(30):
                     self.video.write(current_image)
 
                 self.video.release()
+
             cv2.destroyAllWindows()
             rospy.signal_shutdown("User pressed ESC")
         
@@ -794,28 +862,35 @@ class JackalDrive:
             if self.goal_id < self.goal_images.shape[0] - 1:
                 self.goal_id += 1
                 print("switched to next goal")
+                return
         
         # Switch to previous goal image if pressed 'p'
         elif key == ord('p'):
             if self.goal_id > 0:
                 self.goal_id -= 1
                 print("switched to previous goal")
-                
+                return
+        
         if distance_to_current_goal < self.goal_conditioning_threshold:
 
             self.goal_id += 1
             self.num_goals_completed += 1
 
+            self.last_checkpoint_completed_time = rospy.Time.now().to_sec() - self.init_time
+            self.total_time_elapsed = self.last_checkpoint_completed_time
+
             if self.goal_id >= self.goal_images.shape[0]:
-                self.write_output_summary(output_dir=self.output_dir,
+
+                self.write_output_summary(output_filepath=self.output_filepath,
                                           num_goals_completed=self.num_goals_completed,
                                           num_disengagements=self.disengagement_count,
-                                          time_disengagements=self.manual_time,
+                                          time_disengagements=self.manual_drive_time,
+                                          time_to_complete_last_checkpoint=self.last_checkpoint_completed_time,
                                           total_time_elapsed=self.total_time_elapsed,
                                           autonomy_percentage=self.autonomy_percentage)
 
                 if self.record_video:
-                    # put the last viz image for 30 frames in the end when it stops
+                    # Put the last viz image for 30 frames in the end when it stops
                     for i in range(30):
                         self.video.write(current_image)
 
