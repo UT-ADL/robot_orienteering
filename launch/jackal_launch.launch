@@ -4,33 +4,33 @@
     <arg name="play_bag" default="False" />
     <arg name="bag_filepath" default="/home/adl/robot_orienteering_ws/delta_2024-10-15-14-15-06.bag" />
 
-    <arg name='goal_image_dir' default='$(find robot_orienteering)/data/delta_demo_images' />
-
     <arg name='config_dir_path' default='$(find robot_orienteering)/config' />
-
     <arg name='local_model_type' default='nomad' doc='gnm, vint, nomad' />
     <arg name='local_model_path' default='$(find robot_orienteering)/data/onnx_models' />
-
     <arg name='global_model_path' default='$(find robot_orienteering)/data/onnx_models/distance_segment.onnx' />
+    
+    <arg name='goal_image_dir' default='$(find robot_orienteering)/data/delta_demo_images' />    
     <arg name='map_path' default='$(find robot_orienteering)/data/maps' />
-    <arg name='map_name' default='Delta' />
+    <arg name='map_name' default='Delta' />    
     <arg name='map_extension' default='tif' />
 
     <arg name='fps' default='15' />
     <arg name='timer_frequency' default='10' />
     <arg name='record_video' default='' />
-+
+
     <arg name='nomad_conditioning_threshold' default='3' />
-    <arg name='gps_conditioning_threshold' default='7' />  
+    <arg name='gps_conditioning_threshold' default='5' />  
 
     <arg name='use_gps' default='True' />
     <arg name='use_global_planner' default='False' />
     <arg name='use_laser' default='True' />
     <arg name='use_nomad' default='False' />
 
-    <arg name='initial_heading' default='0' />
+    <arg name='num_trajectories' default='9' />    
     <arg name='node_name' default='robot_drive.py' />
+    
     <arg name='output_dir' default='$(find robot_orienteering)/output' />
+    <arg name='output_filename' default='' />
 
 
     <!-- Play ros bag with all topics if validating off-policy -->
@@ -38,7 +38,7 @@
     <group if="$(arg play_bag)">
         <node pkg="rosbag" type="play" name="rosbag_play" args="$(arg bag_filepath) --pause --delay 5" />
     </group>
-
+    
 
     <!-- Run all required packages if running on-policy -->
     <group unless="$(arg play_bag)">
@@ -57,7 +57,7 @@
 
         <param name="/zed/zed_node/pos_tracking/publish_map_tf" type="Bool" value="false" />
         <param name="/zed/zed_node/pos_tracking/publish_tf" type="Bool" value="false" />
-        <param name="/zed/zed_node/pos_tracking/pos_tracking_enabled" type="Bool" value="false" /> 
+        <!-- <param name="/zed/zed_node/pos_tracking/pos_tracking_enabled" type="Bool" value="false" />  -->
         <!-- ******************************************************************************************************************************************* -->
 
         <!-- xsens driver -->
@@ -72,7 +72,7 @@
         <node pkg="tf2_ros" type="static_transform_publisher" name="gps_frame_transform" args="-0.05 0 0.41 0 0 0 1 chassis_link gps_frame" />
 
         <!-- Deadman switch -->
-        <node pkg="robot_orienteering" type="deadman_switch.py" name="deadman_switch" />
+        <!-- <node pkg="robot_orienteering" type="deadman_switch.py" name="deadman_switch" /> -->
 
     </group>
 
@@ -89,6 +89,8 @@
     <!-- Run the robot navigation node -->
     <node pkg="robot_orienteering" type="$(arg node_name)" name="inference" required="true" output="screen">
         <param name="goal_image_dir" value="$(arg goal_image_dir)" />
+        <param name="goal_gps_filepath" value="$(arg goal_gps_filepath)" />
+        <param name="goal_gps_xml_filepath" value="$(arg goal_gps_xml_filepath)" />
         <param name="config_dir_path" value="$(arg config_dir_path)" />
 
         <param name="local_model_type" value="$(arg local_model_type)" />
@@ -116,8 +118,9 @@
         <param name="use_laser" value="$(arg use_laser)" />
         <param name="use_nomad" value="$(arg use_nomad)" />
 
-        <param name="initial_heading" value="$(arg initial_heading)" />
+        <param name="num_trajectories" value="$(arg num_trajectories)" />
         <param name="output_dir" value="$(arg output_dir)" />
+        <param name="output_filename" value="$(arg output_filename)" />
 
     </node>
 
