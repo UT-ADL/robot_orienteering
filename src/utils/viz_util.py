@@ -49,7 +49,7 @@ def show_info_overlay(frame, v, w, goal_distance, drive_mode, num_goals_complete
                     cv2.FONT_HERSHEY_SIMPLEX, font_size, YELLOW, 1, cv2.LINE_AA)
         cv2.putText(frame, f'Disengagements: {num_disengagements}', (10, 135),
                     cv2.FONT_HERSHEY_SIMPLEX, font_size, YELLOW, 1, cv2.LINE_AA)
-        cv2.putText(frame, 'Manaul Drive Time: {:.2f} Sec'.format(manual_drive_time), (10, 155),
+        cv2.putText(frame, 'Manual Drive Time: {:.2f} Sec'.format(manual_drive_time), (10, 155),
                     cv2.FONT_HERSHEY_SIMPLEX, font_size, YELLOW, 1, cv2.LINE_AA)
         cv2.putText(frame, 'Total Time Elapsed: {:.2f} Sec'.format(total_time_elapsed), (10, 175),
                     cv2.FONT_HERSHEY_SIMPLEX, font_size, YELLOW, 1, cv2.LINE_AA)
