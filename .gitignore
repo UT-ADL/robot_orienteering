@@ -1,3 +1,8 @@
 data/onnx_models
+data/Jaama_orienteering_goal_images
+data/Kruusamae_goal_images
+data/csv
+data/test_goal_images
+data/vikerkaare_orienteering
 output
 scripts
